@@ -1,367 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Smart Home Admin Dashboard</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Home Admin Dashboard</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <style>
-    :root {
-      --primary: #6366f1;
-      --primary-dark: #4f46e5;
-      --bg: #f4f6fb;
-      --card: #ffffff;
-      --text: #1f2937;
-      --muted: #6b7280;
-      --radius: 18px;
-    }
-
-    * {
-      box-sizing: border-box;
-      font-family: "Inter", system-ui, sans-serif;
-    }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    header {
-      background: var(--card);
-      padding: 1.2rem 1.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-
-    header h1 {
-      font-size: 1.2rem;
-      margin: 0;
-    }
-
-    .role {
-      font-size: 0.85rem;
-      padding: 0.3rem 0.7rem;
-      border-radius: 999px;
-      background: #eef2ff;
-      color: var(--primary);
-      font-weight: 500;
-    }
-
-    .nav-back {
-      font-size: 0.90rem;
-      padding: 1px;
-      border-radius: 999px;
-      color: var(--primary);
-      font-weight: 500;
-      width:80px;
-	  cursor: pointer;
-    }
-
-    main {
-      max-width: 1100px;
-      margin: auto;
-      padding: 1.5rem;
-    }
-/*IOT Devices*/
-.section-title {
-      font-size: 1.1rem;
-      margin-bottom: 1rem;
-      font-weight: 600;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 1rem;
-    }
-
-    .card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 1.2rem;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.06);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .card h3 {
-      margin: 0 0 0.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-    }
-
-    .card p {
-      margin: 0;
-      font-size: 0.85rem;
-      color: var(--muted);
-    }
-
-    .device {
-      gap: 0.8rem;
-    }
-
-    .device-status {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 1rem;
-    }
-
-    .toggle {
-      width: 42px;
-      height: 24px;
-      background: #e5e7eb;
-      border-radius: 999px;
-      position: relative;
-      cursor: pointer;
-    }
-
-    .toggle::after {
-      content: "";
-      width: 18px;
-      height: 18px;
-      background: white;
-      border-radius: 50%;
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      transition: all 0.2s;
-    }
-
-    .toggle.active {
-      background: var(--primary);
-    }
-
-    .toggle.active::after {
-      left: 21px;
-    }
-
-
-
-/*Stat Card*/
-
-    .stats {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 2rem;
-      flex-wrap: wrap;
-    }
-
-    .stat {
-      flex: 1;
-      min-width: 160px;
-      background: linear-gradient(135deg, #eef2ff, #ffffff);
-      border-radius: var(--radius);
-      padding: 1rem;
-    }
-
-    .stat span {
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-
-    .stat strong {
-      display: block;
-      font-size: 1.4rem;
-      margin-top: 0.3rem;
-    }
-
-/* CHARTS */
-    .charts {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.5rem;
-      margin-top: 1rem;
-    }
-
-    .chart-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 1.2rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-    }
-
-    .chart-card h3 {
-      margin: 0 0 1rem;
-      font-size: 1rem;
-      font-weight: 600;
-    }
-
-
-    /* CARDS */
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1.2rem;
-    }
-
-    .dashboard-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 1.6rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .dashboard-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 18px 35px rgba(0,0,0,0.12);
-    }
-
-    .icon {
-      font-size: 2rem;
-    }
-
-  /* MODERN FORM */
-  .form-card {
-    background: var(--card);
-    border-radius: 20px;
-    padding: 2rem;
-    max-width: 520px;
-    margin: auto;
-    box-shadow:
-      0 20px 40px rgba(0,0,0,0.08),
-      0 5px 15px rgba(0,0,0,0.05);
-  }
-
-  .form-card h2 {
-    text-align: center;
-    margin-bottom: 1.8rem;
-    font-weight: 600;
-  }
-
-  .field {
-    position: relative;
-    margin-bottom: 1.4rem;
-  }
-
-  .field input,
-  .field select {
-    width: 100%;
-    padding: 0.9rem 0.9rem;
-    border-radius: 14px;
-    border: 1px solid #e5e7eb;
-    font-size: 0.95rem;
-    background: transparent;
-    outline: none;
-  }
-
-  .field label {
-    position: absolute;
-    left: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: white;
-    padding: 0 6px;
-    font-size: 0.85rem;
-    color: var(--muted);
-    pointer-events: none;
-    transition: 0.2s ease;
-  }
-
-  .field input:focus + label,
-  .field input:not(:placeholder-shown) + label,
-  .field select:focus + label {
-    top: -8px;
-    font-size: 0.75rem;
-    color: var(--primary);
-  }
-
-/* Float select labels when select has a value */
-.field select.floating-select:focus + label,
-.field select.floating-select:not([value=""]) + label,
-.field select.floating-select option:checked + label {
-  top: -8px;
-  font-size: 0.75rem;
-  color: var(--primary);
+<style>
+:root{
+  --primary:#6366f1;--bg:#f4f6fb;--card:#fff;
+  --text:#1f2937;--muted:#6b7280;--radius:18px;
 }
+*{box-sizing:border-box;font-family:Inter,system-ui}
+body{margin:0;background:var(--bg);color:var(--text)}
+header{background:#fff;padding:1rem 1.5rem;display:flex;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.role{background:#eef2ff;color:var(--primary);padding:.3rem .7rem;border-radius:999px}
+main{max-width:1100px;margin:auto;padding:1.5rem}
+.nav-back{cursor:pointer;color:var(--primary);margin-bottom:1rem}
 
+/* Cards */
+.card{background:#fff;border-radius:18px;padding:1.2rem;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
 
-  .form-actions {
-    display: flex;
-    gap: 0.8rem;
-    margin-top: 1.5rem;
-  }
+/* Toggle */
+.toggle{width:42px;height:24px;background:#e5e7eb;border-radius:999px;position:relative;cursor:pointer}
+.toggle::after{content:"";width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:.2s}
+.toggle.active{background:var(--primary)}
+.toggle.active::after{left:21px}
 
-  .btn-primary {
-    flex: 1;
-    background: linear-gradient(135deg, #6366f1, #4f46e5);
-    color: white;
-    border: none;
-    padding: 0.9rem;
-    border-radius: 16px;
-    font-size: 0.95rem;
-  }
+/* Stats */
+.stats{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:2rem}
+.stat{flex:1;min-width:160px;background:linear-gradient(135deg,#eef2ff,#fff);border-radius:18px;padding:1rem}
+.stat strong{font-size:1.4rem}
 
-  .btn-secondary {
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-size: 0.9rem;
-  }
+/* Dashboard */
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.2rem}
+.dashboard-card{background:#fff;padding:1.6rem;border-radius:18px;cursor:pointer;box-shadow:0 10px 25px rgba(0,0,0,.08)}
+.dashboard-card:hover{transform:translateY(-4px)}
 
-.tenant-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.95rem;
-}
+/* Charts */
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;margin-top:2rem}
+.chart-card{background:#fff;padding:1.5rem;border-radius:18px}
 
-.tenant-table th, .tenant-table td {
-  padding: 0.8rem 1rem;
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-}
+/* Tables */
+table{width:100%;border-collapse:collapse}
+th,td{padding:.7rem;border-bottom:1px solid #e5e7eb;text-align:left}
+th{background:#f9fafb}
 
-.tenant-table th {
-  background: #f9fafb;
-  font-weight: 600;
-}
+/* Forms */
+.form-card{max-width:520px;margin:auto;background:#fff;padding:2rem;border-radius:20px}
+input,select,button{padding:.7rem;border-radius:12px;border:1px solid #e5e7eb}
+button{cursor:pointer}
+button.primary{background:var(--primary);color:#fff;border:none}
 
-.tenant-table tr:hover {
-  background: #f3f4f6;
-}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:99}
+.modal{background:#fff;padding:1.5rem;border-radius:16px;width:320px}
+.modal-buttons{display:flex;justify-content:flex-end;gap:.5rem}
 
-.btn-sm {
-  padding: 0.35rem 0.7rem;
-  font-size: 0.8rem;
-  border-radius: 12px;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-primary.btn-sm {
-  background: var(--primary);
-  color: white;
-}
-
-.btn-secondary.btn-sm {
-  background: #f3f4f6;
-  color: var(--text);
-}
-
-
-footer {
-      text-align: center;
-      padding: 1.2rem;
-      font-size: 0.8rem;
-      color: var(--muted);
-}
-
-
-
-  </style>
+footer{text-align:center;padding:1rem;color:var(--muted)}
+</style>
 </head>
+
 <body>
 
 <header>
@@ -370,530 +72,188 @@ footer {
 </header>
 
 <main id="app"></main>
-	
- <!-- 🌿 Custom Confirmation Modal -->
-  <div id="modal-overlay" class="modal-overlay">
-    <div class="modal">
-      <h3>Confirm Delete</h3>
-      <p id="modal-message">Are you sure you want to delete this item?</p>
-      <div class="modal-buttons">
-        <button class="btn-cancel" id="cancel-btn">Cancel</button>
-        <button class="btn-confirm" id="confirm-btn">Delete</button>
-      </div>
+
+<div id="modal" class="modal-overlay">
+  <div class="modal">
+    <h3>Confirm</h3>
+    <p id="modal-text"></p>
+    <div class="modal-buttons">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" id="modal-ok">Delete</button>
     </div>
   </div>
+</div>
 
-<footer>
-  © 2026 Smart Home & Rental Management System
-</footer>
+<footer>© 2026 Smart Home & Rental Management</footer>
 
 <script>
-  const app = document.getElementById("app");
+/* ================= STATE ================= */
+const app = document.getElementById("app");
 
-	
+let homes=[
+  {id:1,name:"Main House"},
+  {id:2,name:"Beach Villa"}
+];
 
-	/*Smart Home Setting*/
-	const homes = [
-      { id: 1, name: "Main House" },
-      { id: 2, name: "Beach Villa" }
-    ];
-    const devices = [
-      { id: 1, homeId: 1, name: "Living Room Light", type: "switch", pin: 15 },
-      { id: 2, homeId: 2, name: "Pool Light", type: "switch", pin: 4 }
-    ];
+let devices=[
+  {id:1,homeId:1,name:"Living Room Light",pin:15},
+  {id:2,homeId:2,name:"Pool Light",pin:4}
+];
 
-	const homesTable = document.querySelector("#homes-table tbody");
-    const devicesTable = document.querySelector("#devices-table tbody");
-    const homeSelect = document.getElementById("device-home");
+let tenants=[
+  {id:1,name:"John Doe",email:"john@example.com",role:"Tenant"},
+  {id:2,name:"Admin User",email:"admin@example.com",role:"Admin"}
+];
 
-    const modalOverlay = document.getElementById("modal-overlay");
-    const modalMessage = document.getElementById("modal-message");
-    const confirmBtn = document.getElementById("confirm-btn");
-    const cancelBtn = document.getElementById("cancel-btn");
-	
-    let pendingDelete = null;
+let modalAction=null;
 
-	function openModal(message, onConfirm) {
-      modalMessage.textContent = message;
-      modalOverlay.style.display = "flex";
-      pendingDelete = onConfirm;
-    }
+/* ================= MODAL ================= */
+function openModal(msg,cb){
+  document.getElementById("modal-text").textContent=msg;
+  document.getElementById("modal").style.display="flex";
+  modalAction=cb;
+  document.getElementById("modal-ok").onclick=()=>{cb();closeModal();}
+}
+function closeModal(){
+  document.getElementById("modal").style.display="none";
+  modalAction=null;
+}
 
-    function closeModal() {
-      modalOverlay.style.display = "none";
-      pendingDelete = null;
-    }
-
-    confirmBtn.onclick = () => {
-      if (pendingDelete) pendingDelete();
-      closeModal();
-    };
-    cancelBtn.onclick = closeModal;
-    modalOverlay.addEventListener("click", (e) => {
-      if (e.target === modalOverlay) closeModal();
-    });
-
-    function renderHomes() {
-      homesTable.innerHTML = "";
-      homeSelect.innerHTML = "";
-      homes.forEach(home => {
-        homesTable.innerHTML += `
-          <tr>
-            <td>${home.id}</td>
-            <td>${home.name}</td>
-            <td class="actions">
-              <button class="delete" onclick="confirmDeleteHome(${home.id})">Delete</button>
-            </td>
-          </tr>`;
-        homeSelect.innerHTML += `<option value="${home.id}">${home.name}</option>`;
-      });
-    }
-
-    function renderDevices() {
-      devicesTable.innerHTML = "";
-      devices.forEach(dev => {
-        const home = homes.find(h => h.id === dev.homeId);
-        devicesTable.innerHTML += `
-          <tr>
-            <td>${dev.id}</td>
-            <td>${home ? home.name : "—"}</td>
-            <td>${dev.name}</td>
-            <td>${dev.type}</td>
-            <td>${dev.pin}</td>
-            <td class="actions">
-              <button class="delete" onclick="confirmDeleteDevice(${dev.id})">Delete</button>
-            </td>
-          </tr>`;
-      });
-    }
-
-    function confirmDeleteHome(id) {
-      const home = homes.find(h => h.id === id);
-      openModal(`Are you sure you want to delete "${home.name}" and all its devices?`, () => {
-        deleteHome(id);
-      });
-    }
-
-    function confirmDeleteDevice(id) {
-      const dev = devices.find(d => d.id === id);
-      openModal(`Delete device "${dev.name}" from system?`, () => {
-        deleteDevice(id);
-      });
-    }
-
-    function deleteHome(id) {
-      const idx = homes.findIndex(h => h.id === id);
-      if (idx > -1) homes.splice(idx, 1);
-      for (let i = devices.length - 1; i >= 0; i--) {
-        if (devices[i].homeId === id) devices.splice(i, 1);
-      }
-      renderHomes();
-      renderDevices();
-    }
-
-    function deleteDevice(id) {
-      const idx = devices.findIndex(d => d.id === id);
-      if (idx > -1) devices.splice(idx, 1);
-      renderDevices();
-    }
-
-    document.getElementById("add-home-form").addEventListener("submit", e => {
-      e.preventDefault();
-      const name = document.getElementById("home-name").value.trim();
-      if (!name) return;
-      homes.push({ id: Date.now(), name });
-      renderHomes();
-      e.target.reset();
-    });
-
-    document.getElementById("add-device-form").addEventListener("submit", e => {
-      e.preventDefault();
-      const homeId = parseInt(document.getElementById("device-home").value);
-      const name = document.getElementById("device-name").value.trim();
-      const type = document.getElementById("device-type").value;
-      const pin = parseInt(document.getElementById("device-pin").value);
-      devices.push({ id: Date.now(), homeId, name, type, pin });
-      renderDevices();
-      e.target.reset();
-    });
-
-    
-
-
-  // DASHBOARD VIEW
-  function renderDashboard() {
-    app.innerHTML = `
-
-
-	<!-- STATS -->
-  <div class="stats">
-    <div class="stat"><span>IoT Devices</span><strong>12</strong></div>
-    <div class="stat"><span>Tenants</span><strong>5</strong></div>
-    <div class="stat"><span>Monthly Income</span><strong>$4,500</strong></div>
-  </div>
-
-      <div class="dashboard-grid">
-        <div class="dashboard-card" onclick="renderTenantForm()">
-          <div class="icon">🧑‍💼</div>
-          <h3>Register Account</h3>
-          <p>Add and assign new tenants.</p>
-        </div>
-
-        <div class="dashboard-card" onclick="renderTenantView()">
-          <div class="icon">👀</div>
-          <h3>View Accounts</h3>
-          <p>View and manage tenants.</p>
-        </div>
-
-        <div class="dashboard-card" onclick="renderIOTDevicePanel()">
-          <div class="icon">🧠</div>
-          <h3>Smart Home</h3>
-          <p>Monitor connected devices.</p>
-        </div>
-
-        <div class="dashboard-card" onclick="renderSmartSetting()">
-          <div class="icon">➕</div>
-          <h3>Smart Home Setting</h3>
-          <p>Add new smart devices.</p>
-        </div>
-      </div>
-
-      <!-- CHARTS -->
-  <div class="charts">
-    <div class="chart-card">
-      <h3>Income vs Expenses</h3>
-      <canvas id="pieChart"></canvas>
+/* ================= DASHBOARD ================= */
+function renderDashboard(){
+  app.innerHTML=`
+    <div class="stats">
+      <div class="stat"><span>Devices</span><strong>${devices.length}</strong></div>
+      <div class="stat"><span>Tenants</span><strong>${tenants.length}</strong></div>
+      <div class="stat"><span>Income</span><strong>$4,500</strong></div>
     </div>
 
-    <div class="chart-card">
-      <h3>Monthly Income & Expenses</h3>
-      <canvas id="barChart"></canvas>
-    </div>
-  </div>
-
-
-    `;
-
-
-// Pie Chart
-  new Chart(document.getElementById('pieChart'), {
-    type: 'pie',
-    data: {
-      labels: ['Income', 'Expenses'],
-      datasets: [{
-        data: [4500, 1800],
-        backgroundColor: ['#6366f1', '#f87171']
-      }]
-    }
-  });
-
-  // Bar Chart
-  new Chart(document.getElementById('barChart'), {
-    type: 'bar',
-    data: {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
-      datasets: [
-        {
-          label: 'Income',
-          data: [4000, 4200, 4500, 4700, 4800],
-          backgroundColor: '#6366f1'
-        },
-        {
-          label: 'Expenses',
-          data: [1500, 1700, 1800, 1600, 1900],
-          backgroundColor: '#f87171'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: 'bottom' }
-      }
-    }
-  });
-
-
-  }
-
-//IOT Device Panel
-// DASHBOARD VIEW
-  function renderIOTDevicePanel() {
-    app.innerHTML = `
-	<!-- IOT DEVICES -->
-  <div class="section-title">IoT Devices</div>
-  <div class="nav-back" onclick="renderDashboard()">
-  <h4>← Back</h4>
-</div>
-  <div class="grid">
-    
-    <div class="card device">
-      <div>
-        <h3>💡 Living Room Light</h3>
-        <p>Status: On</p>
-      </div>
-      <div class="device-status">
-        <span>Power</span>
-        <div class="toggle active"></div>
-      </div>
+    <div class="dashboard-grid">
+      <div class="dashboard-card" onclick="renderTenantForm()">Register Account</div>
+      <div class="dashboard-card" onclick="renderTenantView()">View Accounts</div>
+      <div class="dashboard-card" onclick="renderIOT()">Smart Home</div>
+      <div class="dashboard-card" onclick="renderSettings()">Smart Settings</div>
     </div>
 
-    <div class="card device">
-      <div>
-        <h3>❄️ Air Conditioner</h3>
-        <p>Temperature: 22°C</p>
-      </div>
-      <div class="device-status">
-        <span>Power</span>
-        <div class="toggle"></div>
-      </div>
-    </div>
-
-    <div class="card device">
-      <div>
-        <h3>🔒 Main Door Lock</h3>
-        <p>Status: Locked</p>
-      </div>
-      <div class="device-status">
-        <span>Lock</span>
-        <div class="toggle active"></div>
-      </div>
-    </div>
-
-    <div class="card device">
-      <div>
-        <h3>📷 Security Camera</h3>
-        <p>Status: Online</p>
-      </div>
-      <div class="device-status">
-        <span>Active</span>
-        <div class="toggle active"></div>
-      </div>
-    </div>
-
-  </div>
-
-`;
-  }
-
-
-
-  // TENANT REGISTRATION FORM VIEW
-  function renderTenantForm() {
-    app.innerHTML = `
-      <div class="form-card">
-        <h3>🧑‍💼New Account</h3>
-
-        <form>
-          <div class="field">
-            <input type="text" required placeholder=" " />
-            <label>Full Name</label>
-          </div>
-
-          <div class="field">
-            <input type="email" required placeholder=" " />
-            <label>Email Address</label>
-          </div>
-
-          <div class="field">
-            <input type="tel" placeholder=" " />
-            <label>Phone (optional)</label>
-          </div>
-
-          <div class="field">
-            <input type="text" placeholder=" " />
-            <label>Apartment / Unit</label>
-          </div>
-
-          <div class="field">
-            <select required class="floating-select">
-              <option selected>Tenant</option>
-	      <option>User</option>
-              <option>Admin</option>
-            </select>
-            <label>Role</label>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn-secondary" onclick="renderDashboard()">
-              Cancel
-            </button>
-            <button type="submit" class="btn-primary">
-              Create Account
-            </button>
-          </div>
-        </form>
-      </div>
-    `;
-  }
-
-// TENANT VIEW PAGE
-const mockTenants = [
-  { id: 1, name: "John Doe", email: "john@example.com", phone: "+15551234567", unit: "A-101", role: "Tenant" },
-  { id: 2, name: "Jane Smith", email: "jane@example.com", phone: "", unit: "A-102", role: "Tenant" },
-  { id: 3, name: "Admin User", email: "admin@example.com", phone: "+15559876543", unit: "", role: "Admin" }
-]; 
-
-async function renderTenantView() {
-  app.innerHTML = `
-<div class="section-title">View Accounts</div>
-  
-    <div class="nav-back" onclick="renderDashboard()">
-      <h4>← Back</h4>
-    </div>
-
-    <div style="overflow-x:auto; padding:1rem; background:var(--card); border-radius: var(--radius); box-shadow:0 10px 25px rgba(0,0,0,0.08);">
-      
-      <table class="tenant-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Unit</th>
-            <th>Role</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="tenantTableBody">
-          <tr><td colspan="6" style="text-align:center; padding:1rem;">Loading...</td></tr>
-        </tbody>
-      </table>
+    <div class="charts">
+      <div class="chart-card"><canvas id="pie"></canvas></div>
+      <div class="chart-card"><canvas id="bar"></canvas></div>
     </div>
   `;
-
-  // Mock data (replace with await fetch('/api/tenants') for real API)
-  const tenants = mockTenants; 
-
-  const tbody = document.getElementById("tenantTableBody");
-  tbody.innerHTML = "";
-
-  tenants.forEach(t => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${t.name}</td>
-      <td>${t.email}</td>
-      <td>${t.phone || "-"}</td>
-      <td>${t.unit || "-"}</td>
-      <td>${t.role}</td>
-      <td>
-        <button class="btn-primary btn-sm" onclick="editTenant(${t.id})">Edit</button>
-        <button class="btn-secondary btn-sm" onclick="deleteTenant(${t.id})">Delete</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
+  new Chart(pie,{type:"pie",data:{labels:["Income","Expenses"],datasets:[{data:[4500,1800]}]}});
+  new Chart(bar,{type:"bar",data:{labels:["Jan","Feb","Mar"],datasets:[
+    {label:"Income",data:[4000,4300,4500]},
+    {label:"Expenses",data:[1500,1700,1800]}
+  ]}});
 }
-  // INITIAL LOAD
-  renderDashboard();
 
-function renderSmartSetting(){
-	
-	app.innerHTML = ` <!-- Homes Section -->
-    <div class="card">
-      <h2>🏠 Homes</h2>
-      <div class="table-container">
-        <table id="homes-table">
-          <thead>
-            <tr><th>ID</th><th>Name</th><th>Actions</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <form class="add-form" id="add-home-form">
-        <input type="text" id="home-name" placeholder="New Home Name" required />
-        <button type="submit">Add Home</button>
-      </form>
-    </div>
-
-    <!-- Devices Section -->
-    <div class="card">
-      <h2>💡 Devices</h2>
-      <div class="table-container">
-        <table id="devices-table">
-          <thead>
-            <tr><th>ID</th><th>Home</th><th>Name</th><th>Type</th><th>Pin</th><th>Actions</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <form class="add-form" id="add-device-form">
-        <select id="device-home"></select>
-        <input type="text" id="device-name" placeholder="Device Name" required />
-        <select id="device-type">
-          <option value="switch">Switch</option>
-          <option value="sensor">Sensor</option>
-        </select>
-        <input type="number" id="device-pin" placeholder="ESP32 Pin" required min="0" />
-        <button type="submit">Add Device</button>
-      </form>
+/* ================= IOT ================= */
+function renderIOT(){
+  app.innerHTML=`
+    <div class="nav-back" onclick="renderDashboard()">← Back</div>
+    <div class="grid">
+      ${devices.map(d=>`
+        <div class="card">
+          <h3>${d.name}</h3>
+          <div class="toggle active"></div>
+        </div>`).join("")}
     </div>`;
-
-	renderHomes();
-    renderDevices();
 }
 
-function editTenant(id) {
-  const tenant = mockTenants.find(t => t.id === id);
-  if (!tenant) return;
+/* ================= SETTINGS ================= */
+function renderSettings(){
+  app.innerHTML=`
+    <div class="nav-back" onclick="renderDashboard()">← Back</div>
 
-  // prefill the registration form for editing
-  app.innerHTML = `
-    <div style="margin-bottom:1rem; cursor:pointer;" onclick="renderTenantView()">
-      <h4>← Back</h4>
+    <div class="card">
+      <h3>Homes</h3>
+      <table><tr><th>Name</th><th></th></tr>
+      ${homes.map(h=>`
+        <tr><td>${h.name}</td>
+        <td><button onclick="deleteHome(${h.id})">Delete</button></td></tr>`).join("")}
+      </table>
+      <input id="homeName" placeholder="Home name">
+      <button onclick="addHome()">Add</button>
     </div>
 
+    <div class="card" style="margin-top:1rem">
+      <h3>Devices</h3>
+      <table><tr><th>Name</th><th>Pin</th><th></th></tr>
+      ${devices.map(d=>`
+        <tr><td>${d.name}</td><td>${d.pin}</td>
+        <td><button onclick="deleteDevice(${d.id})">Delete</button></td></tr>`).join("")}
+      </table>
+      <select id="devHome">${homes.map(h=>`<option value="${h.id}">${h.name}</option>`)}</select>
+      <input id="devName" placeholder="Device name">
+      <input id="devPin" type="number" placeholder="Pin">
+      <button onclick="addDevice()">Add</button>
+    </div>`;
+}
+
+function addHome(){
+  const name=homeName.value.trim();
+  if(!name)return;
+  homes.push({id:Date.now(),name});
+  renderSettings();
+}
+function addDevice(){
+  devices.push({id:Date.now(),homeId:+devHome.value,name:devName.value,pin:+devPin.value});
+  renderSettings();
+}
+function deleteHome(id){
+  openModal("Delete home and its devices?",()=>{
+    homes=homes.filter(h=>h.id!==id);
+    devices=devices.filter(d=>d.homeId!==id);
+    renderSettings();
+  });
+}
+function deleteDevice(id){
+  openModal("Delete device?",()=>{
+    devices=devices.filter(d=>d.id!==id);
+    renderSettings();
+  });
+}
+
+/* ================= TENANTS ================= */
+function renderTenantView(){
+  app.innerHTML=`
+    <div class="nav-back" onclick="renderDashboard()">← Back</div>
+    <table>
+      <tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>
+      ${tenants.map(t=>`
+        <tr><td>${t.name}</td><td>${t.email}</td><td>${t.role}</td>
+        <td><button onclick="deleteTenant(${t.id})">Delete</button></td></tr>`).join("")}
+    </table>`;
+}
+
+function renderTenantForm(){
+  app.innerHTML=`
+    <div class="nav-back" onclick="renderDashboard()">← Back</div>
     <div class="form-card">
-      <h2>Edit Tenant</h2>
-      <form onsubmit="updateTenant(event, ${id})">
-        <div class="field">
-          <input type="text" value="${tenant.name}" required placeholder=" " />
-          <label>Full Name</label>
-        </div>
-        <div class="field">
-          <input type="email" value="${tenant.email}" required placeholder=" " />
-          <label>Email Address</label>
-        </div>
-        <div class="field">
-          <input type="tel" value="${tenant.phone}" placeholder=" " />
-          <label>Phone</label>
-        </div>
-        <div class="field">
-          <input type="text" value="${tenant.unit}" placeholder=" " />
-          <label>Unit</label>
-        </div>
-        <div class="field">
-          <select required class="floating-select">
-            <option value="Tenant" ${tenant.role === "Tenant" ? "selected" : ""}>Tenant</option>
-            <option value="Admin" ${tenant.role === "Admin" ? "selected" : ""}>Admin</option>
-          </select>
-          <label>Role</label>
-        </div>
-
-        <div class="form-actions">
-          <button type="button" class="btn-secondary" onclick="renderTenantView()">Cancel</button>
-          <button type="submit" class="btn-primary">Update Tenant</button>
-        </div>
-      </form>
-    </div>
-  `;
+      <input id="tName" placeholder="Name">
+      <input id="tEmail" placeholder="Email">
+      <button class="primary" onclick="addTenant()">Create</button>
+    </div>`;
 }
 
-function updateTenant(e, id) {
-  e.preventDefault();
-  alert("Tenant updated (mock)!");
+function addTenant(){
+  tenants.push({id:Date.now(),name:tName.value,email:tEmail.value,role:"Tenant"});
   renderTenantView();
 }
-
-function deleteTenant(id) {
-  if (confirm("Are you sure you want to delete this tenant?")) {
-    alert("Tenant deleted (mock)!");
+function deleteTenant(id){
+  openModal("Delete tenant?",()=>{
+    tenants=tenants.filter(t=>t.id!==id);
     renderTenantView();
-  }
+  });
 }
 
+/* ================= TOGGLE ================= */
+document.addEventListener("click",e=>{
+  if(e.target.classList.contains("toggle"))e.target.classList.toggle("active");
+});
 
+/* INIT */
+renderDashboard();
 </script>
-
 </body>
 </html>
