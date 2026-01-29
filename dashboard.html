@@ -170,7 +170,9 @@ function renderSettings(){
       <table><tr><th>Name</th><th></th></tr>
       ${homes.map(h=>`
         <tr><td>${h.name}</td>
-        <td><button onclick="deleteHome(${h.id})">Delete</button></td></tr>`).join("")}
+        <td>
+            <button class="primary" onclick="renderEditHome(${h.id})">Edit</button>
+            <button onclick="deleteHome(${h.id})">Delete</button></td></tr>`).join("")}
       </table>
       <input id="homeName" placeholder="Home name">
       <button class="primary" onclick="addHome()">Add</button>
@@ -181,7 +183,9 @@ function renderSettings(){
       <table><tr><th>Name</th><th>Pin</th><th></th></tr>
       ${devices.map(d=>`
         <tr><td>${d.name}</td><td>${d.pin}</td>
-        <td><button onclick="deleteDevice(${d.id})">Delete</button></td></tr>`).join("")}
+        <td>
+            <button class="primary" onclick="renderEditDevice(${d.id})">Edit</button>
+            <button onclick="deleteDevice(${d.id})">Delete</button></td></tr>`).join("")}
       </table>
       <select id="devHome">${homes.map(h=>`<option value="${h.id}">${h.name}</option>`)}</select>
       <input id="devName" placeholder="Device name">
@@ -287,6 +291,76 @@ function renderEditTenant(id){
   `;
 }
 
+function renderEditHome(id){
+  const home = homes.find(h=>h.id===id);
+  if(!home) return;
+
+  app.innerHTML = `
+    <div class="nav-back" onclick="renderSettings()">← Back</div>
+
+    <div class="form-card">
+      <h3>Edit Home</h3>
+
+      <input id="editHomeName" value="${home.name}" placeholder="Home Name">
+
+      <div style="display:flex;gap:.5rem;margin-top:1rem">
+        <button class="primary" onclick="updateHome(${id})">Save</button>
+        <button onclick="renderSettings()">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function updateHome(id){
+  const home = homes.find(h=>h.id===id);
+  if(!home) return;
+
+  home.name = editHomeName.value.trim();
+  renderSettings();
+}
+
+
+function renderEditDevice(id){
+  const device = devices.find(d=>d.id===id);
+  if(!device) return;
+
+  app.innerHTML = `
+    <div class="nav-back" onclick="renderSettings()">← Back</div>
+
+    <div class="form-card">
+      <h3>Edit Device</h3>
+
+      <select id="editDeviceHome">
+        ${homes.map(h=>`
+          <option value="${h.id}" ${h.id===device.homeId?"selected":""}>
+            ${h.name}
+          </option>
+        `).join("")}
+      </select>
+
+      <input id="editDeviceName" value="${device.name}" placeholder="Device Name">
+      <input id="editDevicePin" type="number" value="${device.pin}" placeholder="Pin">
+
+      <div style="display:flex;gap:.5rem;margin-top:1rem">
+        <button class="primary" onclick="updateDevice(${id})">Save</button>
+        <button onclick="renderSettings()">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function updateDevice(id){
+  const device = devices.find(d=>d.id===id);
+  if(!device) return;
+
+  device.homeId = Number(editDeviceHome.value);
+  device.name = editDeviceName.value.trim();
+  device.pin = Number(editDevicePin.value);
+
+  renderSettings();
+}
+
+  
 /* ================= TOGGLE ================= */
 document.addEventListener("click",e=>{
   if(e.target.classList.contains("toggle"))e.target.classList.toggle("active");
