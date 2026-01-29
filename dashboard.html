@@ -400,15 +400,6 @@ footer {
       { id: 2, homeId: 2, name: "Pool Light", type: "switch", pin: 4 }
     ];
 
-    const homesTable = document.querySelector("#homes-table tbody");
-    const devicesTable = document.querySelector("#devices-table tbody");
-    const homeSelect = document.getElementById("device-home");
-
-    const modalOverlay = document.getElementById("modal-overlay");
-    const modalMessage = document.getElementById("modal-message");
-    const confirmBtn = document.getElementById("confirm-btn");
-    const cancelBtn = document.getElementById("cancel-btn");
-
     let pendingDelete = null;
 
 	function openModal(message, onConfirm) {
@@ -786,6 +777,16 @@ async function renderTenantView() {
   renderDashboard();
 
 function renderSmartSetting(){
+
+	const homesTable = document.querySelector("#homes-table tbody");
+    const devicesTable = document.querySelector("#devices-table tbody");
+    const homeSelect = document.getElementById("device-home");
+
+    const modalOverlay = document.getElementById("modal-overlay");
+    const modalMessage = document.getElementById("modal-message");
+    const confirmBtn = document.getElementById("confirm-btn");
+    const cancelBtn = document.getElementById("cancel-btn");
+	
 	app.innerHTML = ` <!-- Homes Section -->
     <div class="card">
       <h2>🏠 Homes</h2>
