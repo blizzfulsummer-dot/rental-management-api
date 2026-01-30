@@ -189,6 +189,34 @@
     messageBox.style.display = "block";
   }
 
+  // Auto-redirect if already logged in
+  (async function checkToken() {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/me`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.valid) {
+        // User is authenticated, redirect to dashboard
+        window.location.href = "/dashboard.html";
+      } else {
+        // Token invalid or expired, remove it
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+      }
+    } catch (err) {
+      console.error("Token check failed:", err);
+    }
+  })();
+  
   async function submitLogIn(event) {
     event.preventDefault();
     messageBox.style.display = "none";
