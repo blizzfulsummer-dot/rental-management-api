@@ -200,7 +200,7 @@ function renderSettings(){
       ${homes.map(h=>`
         <tr><td>${h.name}</td>
         <td>
-            <button onclick="renderEditHome(${h.id})">Edit</button>
+            <button class="primary "onclick="renderEditHome(${h.id})">Edit</button>
             <button onclick="deleteHome(${h.id})">Delete</button></td></tr>`).join("")}
       </table>
       <input id="homeName" placeholder="Home name">
@@ -213,7 +213,7 @@ function renderSettings(){
       ${devices.map(d=>`
         <tr><td>${d.name}</td><td>${d.pin}</td>
         <td>
-            <button onclick="renderEditDevice(${d.id})">Edit</button>
+            <button class="primary" onclick="renderEditDevice(${d.id})">Edit</button>
             <button onclick="deleteDevice(${d.id})">Delete</button></td></tr>`).join("")}
       </table>
       <select id="devHome">${homes.map(h=>`<option value="${h.id}">${h.name}</option>`)}</select>
