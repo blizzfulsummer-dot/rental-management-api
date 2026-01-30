@@ -90,29 +90,27 @@ footer{text-align:center;padding:1rem;color:var(--muted)}
 /* ================= STATE ================= */
 const app = document.getElementById("app");
 
- async function verifyUser() {
+async function verifyUser() {
   let accessToken = localStorage.getItem("accessToken");
   const refreshToken = localStorage.getItem("refreshToken");
 
   if (!accessToken) {
-    // No access token, redirect to login
     window.location.href = "/login.html";
     return;
   }
 
   try {
-    // Verify token with /me endpoint
     let res = await fetch(`${API_URL}/me`, {
       headers: { "Authorization": `Bearer ${accessToken}` }
     });
 
     if (res.ok) {
       const data = await res.json();
-      // Token is valid, proceed to render dashboard
       console.log("User:", data.user);
-      document.getElementById("username").textContent = data.user.name;
+      // you can store or display username
+      // document.getElementById("username").textContent = data.user.name;
     } else if (res.status === 401 && refreshToken) {
-      // Access token expired, try refreshing
+      // Try refreshing token
       const refreshRes = await fetch(`${API_URL}/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -122,25 +120,26 @@ const app = document.getElementById("app");
       if (refreshRes.ok) {
         const newTokens = await refreshRes.json();
         localStorage.setItem("accessToken", newTokens.accessToken);
-        // Retry verification
-        verifyUser();
+        // 🔹 reload page once instead of recursive call
+        window.location.reload();
       } else {
-        // Refresh failed, redirect to login
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
         window.location.href = "/login.html";
       }
     } else {
-      // Invalid token, redirect to login
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
       window.location.href = "/login.html";
     }
   } catch (err) {
     console.error(err);
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
     window.location.href = "/login.html";
   }
 }
+
 
 // Run verification as soon as dashboard loads
 verifyUser(); 
