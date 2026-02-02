@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose';
+import { listTenants, getTenant, updateTenant, deleteTenant } from './tenant';
 
 /* =========================
    WORKER FETCH
