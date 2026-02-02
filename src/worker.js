@@ -68,6 +68,36 @@ export default {
         return withCors(await verifyJwt(request, env));
       }
 
+      const { user, error, status } = await getAuthUser(request, env);
+      if (error) return withCors(json({ error }, status));
+
+      /* TENANTS */
+      if (url.pathname === '/api/tenants' && request.method === 'POST') {
+          return withCors(await createTenant(request, env, user));
+      }
+
+      if (url.pathname === '/api/tenants' && request.method === 'GET') {
+          return withCors(await listTenants(request, env, user));
+      }
+
+      if (url.pathname.startsWith('/api/tenants/') ) {
+          const id = url.pathname.split('/').pop();
+
+        if (request.method === 'GET') {
+            return withCors(await getTenant(request, env, user, id));
+        }
+
+        if (request.method === 'PUT') {
+            return withCors(await updateTenant(request, env, user, id));
+        }
+
+        if (request.method === 'DELETE') {
+            return withCors(await deleteTenant(request, env, user, id));
+        }
+      }
+
+
+
       return withCors(new Response('Rental Management Worker is running!', { status: 200 }));
     } catch (err) {
       console.error(err);
