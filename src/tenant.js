@@ -51,6 +51,7 @@ export async function listTenants(request, env, authUser) {
         t.id,
         u.email,
         u.name,
+        u.role,
         t.balance,
         t.rent_amount,
         t.leased_unit,
