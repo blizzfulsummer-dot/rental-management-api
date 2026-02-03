@@ -212,42 +212,70 @@ async function signup(request, env) {
   }
 
   // If role is tenant, insert into tenants table
+// If role is tenant, insert into tenants table
 if (r === 'tenant') {
+  // Log payload for debugging
+  console.log('Tenant payload received:', { balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date });
+
   // Check for null or undefined
   const missingFields = [];
-  if (balance === undefined) missingFields.push('balance');
-  if (deposit === undefined) missingFields.push('deposit');
-  if (rent_amount === undefined) missingFields.push('rent_amount');
-  if (!billing_cycle) missingFields.push('billing_cycle');
-  if (!leased_unit) missingFields.push('leased_unit');
-  if (!onboard_date) missingFields.push('onboard_date');
+  if (balance === undefined || balance === null) missingFields.push(`balance=${balance}`);
+  if (deposit === undefined || deposit === null) missingFields.push(`deposit=${deposit}`);
+  if (rent_amount === undefined || rent_amount === null) missingFields.push(`rent_amount=${rent_amount}`);
+  if (!billing_cycle) missingFields.push(`billing_cycle=${billing_cycle}`);
+  if (!leased_unit) missingFields.push(`leased_unit=${leased_unit}`);
+  if (!onboard_date) missingFields.push(`onboard_date=${onboard_date}`);
 
   if (missingFields.length > 0) {
-    console.error('Missing or undefined tenant fields:', missingFields);
-    return json({ error: 'Missing tenant fields', fields: missingFields }, 400);
+    console.error('Missing or invalid tenant fields:', missingFields);
+    return json({ error: 'Invalid tenant fields', fields: missingFields }, 400);
   }
 
+  // Force types for D1
+  const tenantBalance = Number(balance);
+  const tenantDeposit = Number(deposit);
+  const tenantRentAmount = Number(rent_amount);
+  const tenantBillingCycle = String(billing_cycle);
+  const tenantLeasedUnit = String(leased_unit);
   const tenantOnboardDate = new Date(onboard_date).toISOString();
-  const tenantBillingCycle = billing_cycle || "monthly";
+  const tenantCreatedAt = new Date().toISOString();
 
-  await env.DB
-    .prepare(`
-      INSERT INTO tenants 
-        (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-    .bind(
-      userId,
-      balance,
-      deposit,
-      rent_amount,
-      tenantBillingCycle,
-      leased_unit,
-      tenantOnboardDate,
-      new Date().toISOString()
-    )
-    .run();
+  // Log coerced values
+  console.log('Tenant insert values (coerced):', {
+    user_id: userId,
+    balance: tenantBalance,
+    deposit: tenantDeposit,
+    rent_amount: tenantRentAmount,
+    billing_cycle: tenantBillingCycle,
+    leased_unit: tenantLeasedUnit,
+    onboard_date: tenantOnboardDate,
+    created_at: tenantCreatedAt
+  });
+
+  try {
+    await env.DB
+      .prepare(`
+        INSERT INTO tenants 
+          (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        userId,
+        tenantBalance,
+        tenantDeposit,
+        tenantRentAmount,
+        tenantBillingCycle,
+        tenantLeasedUnit,
+        tenantOnboardDate,
+        tenantCreatedAt
+      )
+      .run();
+  } catch (err) {
+    console.error('D1 insert error:', err);
+    return json({ error: 'Failed to insert tenant', details: err.message }, 500);
+  }
 }
+
 
 
   return json({ success: true, message: 'User registered successfully', tempPassword: tempPassword });
