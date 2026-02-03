@@ -126,11 +126,42 @@ async function signup(request, env) {
           onboard_date,
           code
           } = await request.json();
-  if (!email || !password || !role) return json({ error: 'Missing fields' }, 400);
+  if (!email || !role) return json({ error: 'Missing fields' }, 400);
+
+  const allowedRole = ['admin', 'tenant', 'user'];
 
   const normalizeRole = role.trim().toLowerCase();
 
+  if(!allowedRole.includes(normalizeRole)) return json({error:'Invalid Role'},400);
+
   let registrationCode;
+
+  let finalPassword;
+  let tempPassword = null;
+  let mustChangePassword = 0;
+  let tempPasswordExpires = null;
+
+  if (normalizeRole === 'tenant' || normalizeRole === 'user') {
+  
+      const { user, error, status } = await getAuthUser(request, env);
+      if (error) return withCors(json({ error }, status));
+
+      if(user.role !== "admin"){
+        return json({ error: 'Forbidden' }, 403);
+      }
+
+      tempPassword = generateTempPassword();
+      finalPassword = tempPassword;
+      mustChangePassword = 1;
+      tempPasswordExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  } else {
+      // admin or self-registered user
+      if (!password) {
+          return json({ error: 'Password required' }, 400);
+      }
+          finalPassword = password;
+  }
 
   if(normalizeRole === "admin"){
     
@@ -152,15 +183,16 @@ async function signup(request, env) {
 
   if (existing) return json({ error: 'Email already exists' }, 400);
 
-  const { hash: derivedBits, salt } = await hashPBKDF2(password);
+
+  const { hash: derivedBits, salt } = await hashPBKDF2(finalPassword);
   const hashHex = arrayBufferToHex(derivedBits);
   const saltHex = arrayBufferToHex(salt);
 
-  const r = role?.trim().toLowerCase() || 'user';
+  const r = role?.trim().toLowerCase();
 
   const userInsert = await env.DB
-    .prepare('INSERT INTO users (email, password_hash, password_salt, role, created_at, name) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(normalizedEmail, hashHex, saltHex, r, new Date().toISOString(), name)
+    .prepare('INSERT INTO users (email, password_hash, password_salt, role, created_at, name, requires_change_password, temp_password_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(normalizedEmail, hashHex, saltHex, r, new Date().toISOString(), name, mustChangePassword, tempPasswordExpires)
     .run();
 
   // Get the inserted user's ID
@@ -174,18 +206,8 @@ async function signup(request, env) {
       .run();
   }
 
-  
-
   // If role is tenant, insert into tenants table
-  if (r === 'tenant' || r ==='user') {
-
-    const { user, error, status } = await getAuthUser(request, env);
-
-    if (error) return json({ error }, status);
-
-    if (user.role !== 'admin') {
-      return json({ error: 'Forbidden' }, 403);
-    }
+  if (r === 'tenant') {
 
     if (!balance || !rent_amount || !leased_unit || !onboard_date) {
       return json({ error: 'Missing tenant-specific fields' }, 400);
@@ -210,8 +232,23 @@ async function signup(request, env) {
       .run();
   }
 
-  return json({ success: true, message: 'User registered successfully' });
+  return json({ success: true, message: 'User registered successfully', tempPassword: tempPassword });
 }
+
+/*Create Temporary Password*/
+
+function generateTempPassword(length = 10) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$';
+  let password = '';
+  const array = new Uint32Array(length);
+  crypto.getRandomValues(array);
+  for (let i = 0; i < length; i++) {
+    password += chars[array[i] % chars.length];
+  }
+  return password;
+}
+
+
 
 /* =========================
    LOGIN HANDLER
