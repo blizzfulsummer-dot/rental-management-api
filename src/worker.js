@@ -253,27 +253,52 @@ if (r === 'tenant') {
   });
 
   try {
-    await env.DB
-      .prepare(`
-        INSERT INTO tenants 
-          (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .bind(
-        userId,
-        tenantBalance,
-        tenantDeposit,
-        tenantRentAmount,
-        tenantBillingCycle,
-        tenantLeasedUnit,
-        tenantOnboardDate,
-        tenantCreatedAt
-      )
-      .run();
-  } catch (err) {
-    console.error('D1 insert error:', err);
-    return json({ error: 'Failed to insert tenant', details: err.message }, 500);
-  }
+  console.log('Inserting tenant with values:', {
+    user_id: userId,
+    balance: tenantBalance,
+    deposit: tenantDeposit,
+    rent_amount: tenantRentAmount,
+    billing_cycle: tenantBillingCycle,
+    leased_unit: tenantLeasedUnit,
+    onboard_date: tenantOnboardDate,
+    created_at: tenantCreatedAt
+  });
+
+  await env.DB
+    .prepare(`
+      INSERT INTO tenants 
+        (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      userId,
+      tenantBalance,
+      tenantDeposit,
+      tenantRentAmount,
+      tenantBillingCycle,
+      tenantLeasedUnit,
+      tenantOnboardDate,
+      tenantCreatedAt
+    )
+    .run();
+} catch (err) {
+  console.error('D1 insert error:', err);
+  return json({ 
+    error: 'Failed to insert tenant', 
+    details: err.message,
+    tenantValues: {
+      user_id: userId,
+      balance: tenantBalance,
+      deposit: tenantDeposit,
+      rent_amount: tenantRentAmount,
+      billing_cycle: tenantBillingCycle,
+      leased_unit: tenantLeasedUnit,
+      onboard_date: tenantOnboardDate,
+      created_at: tenantCreatedAt
+    }
+  }, 500);
+}
+
 }
 
 
