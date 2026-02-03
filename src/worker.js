@@ -10,6 +10,15 @@ const ALLOWED_ORIGINS = [
   'https://my-other-site.pages.dev'
 ];
 
+// Helper to attach CORS headers
+    function withCors(response) {
+      response.headers.set('Access-Control-Allow-Origin', allowOrigin);
+      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      return response;
+    }
+
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin');
@@ -30,14 +39,7 @@ export default {
       });
     }
 
-    // Helper to attach CORS headers
-    function withCors(response) {
-      response.headers.set('Access-Control-Allow-Origin', allowOrigin);
-      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      return response;
-    }
-
+    
     try {
       const url = new URL(request.url);
 
