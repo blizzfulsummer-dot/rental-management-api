@@ -215,7 +215,7 @@ async function signup(request, env) {
 console.log("Inserted userId:", userId, typeof userId);
 
 if (!userId) {
-  console.error("User insert failed: userId is undefined");
+  console.error("User insert failed: userId is undefined",userInsert);
   return json({ error: "Failed to create user, cannot insert tenant" }, 500);
 }
   // If role is tenant, insert into tenants table
