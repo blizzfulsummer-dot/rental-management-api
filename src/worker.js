@@ -201,7 +201,7 @@ async function signup(request, env) {
     .run();
 
   // Get the inserted user's ID
-  const userId = userInsert.lastInsertRowid;
+  const userId = userInsert.meta?.last_row_id;
 
   // Mark admin code as used and link to user
   if (normalizeRole === "admin") {
@@ -212,10 +212,10 @@ async function signup(request, env) {
   }
 
 
-console.log("Inserted userId:", userInsert, typeof userId);
+console.log("Inserted userId:", userId, typeof userId);
 
 if (!userId) {
-  console.error("User insert failed: userId is undefined",userInsert);
+  console.error("User insert failed: userId is undefined");
   return json({ error: "Failed to create user, cannot insert tenant" }, 500);
 }
   // If role is tenant, insert into tenants table
