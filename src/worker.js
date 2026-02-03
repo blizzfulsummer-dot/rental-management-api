@@ -11,12 +11,13 @@ const ALLOWED_ORIGINS = [
 ];
 
 // Helper to attach CORS headers
-    function withCors(response) {
-      response.headers.set('Access-Control-Allow-Origin', allowOrigin);
-      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      return response;
-    }
+function withCors(response, allowOrigin = "*") {
+  response.headers.set('Access-Control-Allow-Origin', allowOrigin);
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return response;
+}
+
 
 
 export default {
