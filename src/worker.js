@@ -213,14 +213,7 @@ async function signup(request, env) {
 
   // If role is tenant, insert into tenants table
   if (r === 'tenant') {
-
-    if (rent_amount === undefined ||
-       !leased_unit ||
-       !onboard_date
-    ) {
-        return json({ error: 'Missing tenant fields' }, 400);
-    }
-
+  try {
     await env.DB
       .prepare(`
         INSERT INTO tenants 
@@ -238,7 +231,21 @@ async function signup(request, env) {
         new Date().toISOString()
       )
       .run();
+  } catch (err) {
+    // This catches D1-specific errors
+    console.error('Tenant insert failed:', err);
+
+    if (err.message.includes('D1_TYPE_ERROR')) {
+      return json({ error: 'Invalid type for tenant field', details: err.message }, 400);
+    }
+
+    if (err.message.includes('FOREIGN_KEY_CONSTRAINT')) {
+      return json({ error: 'User ID not found for tenant', details: err.message }, 400);
+    }
+
+    return json({ error: 'Tenant insert failed', details: err.message }, 500);
   }
+}
 
   return json({ success: true, message: 'User registered successfully', tempPassword: tempPassword });
 }
