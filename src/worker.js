@@ -212,7 +212,7 @@ async function signup(request, env) {
   }
 
 
-console.log("Inserted userId:", userId, typeof userId);
+console.log("Inserted userId:", userInsert, typeof userId);
 
 if (!userId) {
   console.error("User insert failed: userId is undefined",userInsert);
