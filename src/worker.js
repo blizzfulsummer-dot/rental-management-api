@@ -214,8 +214,11 @@ async function signup(request, env) {
   // If role is tenant, insert into tenants table
   if (r === 'tenant') {
 
-    if (!balance || !rent_amount || !leased_unit || !onboard_date) {
-      return json({ error: 'Missing tenant-specific fields' }, 400);
+    if (rent_amount === undefined ||
+       !leased_unit ||
+       !onboard_date
+    ) {
+        return json({ error: 'Missing tenant fields' }, 400);
     }
 
     await env.DB
