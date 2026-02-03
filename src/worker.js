@@ -143,7 +143,7 @@ async function signup(request, env) {
   let finalPassword;
   let tempPassword = null;
   let mustChangePassword = 0;
-  let tempPasswordExpires = new Date(Date.now);
+  let tempPasswordExpires = null;
 
   if (normalizeRole === 'tenant' || normalizeRole === 'user') {
   
