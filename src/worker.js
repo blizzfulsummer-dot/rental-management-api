@@ -238,9 +238,9 @@ if (r === 'tenant') {
     `)
     .bind(
       userId,
-      tenantBalance,
-      tenantDeposit,
-      tenantRent,
+      balance,
+      deposit,
+      rent_amount,
       tenantBillingCycle,
       leased_unit,
       tenantOnboardDate,
