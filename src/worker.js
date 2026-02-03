@@ -212,50 +212,45 @@ async function signup(request, env) {
   }
 
   // If role is tenant, insert into tenants table
-  if (r === 'tenant') {
-  try {
-   // Convert numeric fields explicitly
-      const tenantBalance = Number(balance);
-      const tenantDeposit = Number(deposit);  
-      const tenantRent = Number(rent_amount);
-      const tenantOnboardDate = new Date(onboard_date).toISOString();
+if (r === 'tenant') {
+  // Convert numeric fields
+  const tenantBalance = Number(balance);
+  const tenantDeposit = Number(deposit);
+  const tenantRent = Number(rent_amount);
 
-  // Optional default for billing_cycle
-      const tenantBillingCycle = billing_cycle || "monthly";
-
-await env.DB
-  .prepare(`
-    INSERT INTO tenants 
-      (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  .bind(
-    userId,
-    tenantBalance,
-    tenantDeposit,
-    tenantRent,
-    tenantBillingCycle,
-    leased_unit,
-    tenantOnboardDate,
-    new Date().toISOString()
-  )
-  .run();
-
-  } catch (err) {
-    // This catches D1-specific errors
-    console.error('Tenant insert failed:', err);
-
-    if (err.message.includes('D1_TYPE_ERROR')) {
-      return json({ error: 'Invalid type for tenant field', details: err.message }, 400);
-    }
-
-    if (err.message.includes('FOREIGN_KEY_CONSTRAINT')) {
-      return json({ error: 'User ID not found for tenant', details: err.message }, 400);
-    }
-
-    return json({ error: 'Tenant insert failed', details: err.message }, 500);
+  if (
+    isNaN(tenantBalance) ||
+    isNaN(tenantDeposit) ||
+    isNaN(tenantRent) ||
+    typeof leased_unit !== 'string' ||
+    !leased_unit.trim() ||
+    !onboard_date
+  ) {
+    return json({ error: 'Invalid tenant field types' }, 400);
   }
+
+  const tenantOnboardDate = new Date(onboard_date).toISOString();
+  const tenantBillingCycle = billing_cycle || "monthly";
+
+  await env.DB
+    .prepare(`
+      INSERT INTO tenants 
+        (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      userId,
+      tenantBalance,
+      tenantDeposit,
+      tenantRent,
+      tenantBillingCycle,
+      leased_unit,
+      tenantOnboardDate,
+      new Date().toISOString()
+    )
+    .run();
 }
+
 
   return json({ success: true, message: 'User registered successfully', tempPassword: tempPassword });
 }
