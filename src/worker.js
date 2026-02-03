@@ -213,20 +213,18 @@ async function signup(request, env) {
 
   // If role is tenant, insert into tenants table
 if (r === 'tenant') {
-  // Convert numeric fields
-  const tenantBalance = Number(balance);
-  const tenantDeposit = Number(deposit);
-  const tenantRent = Number(rent_amount);
+  // Check for null or undefined
+  const missingFields = [];
+  if (balance === undefined) missingFields.push('balance');
+  if (deposit === undefined) missingFields.push('deposit');
+  if (rent_amount === undefined) missingFields.push('rent_amount');
+  if (!billing_cycle) missingFields.push('billing_cycle');
+  if (!leased_unit) missingFields.push('leased_unit');
+  if (!onboard_date) missingFields.push('onboard_date');
 
-  if (
-    isNaN(tenantBalance) ||
-    isNaN(tenantDeposit) ||
-    isNaN(tenantRent) ||
-    typeof leased_unit !== 'string' ||
-    !leased_unit.trim() ||
-    !onboard_date
-  ) {
-    return json({ error: 'Invalid tenant field types' }, 400);
+  if (missingFields.length > 0) {
+    console.error('Missing or undefined tenant fields:', missingFields);
+    return json({ error: 'Missing tenant fields', fields: missingFields }, 400);
   }
 
   const tenantOnboardDate = new Date(onboard_date).toISOString();
