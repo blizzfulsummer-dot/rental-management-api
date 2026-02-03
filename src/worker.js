@@ -74,6 +74,7 @@ export default {
       }
 
       const { user, error, status } = await getAuthUser(request, env);
+
       if (error) return withCors(json({ error }, status));
 
       /* TENANTS */
@@ -140,7 +141,7 @@ async function signup(request, env) {
 
   let registrationCode;
 
-  let finalPassword;
+  let finalPassword="default@1234";
   let tempPassword = null;
   let mustChangePassword = 0;
   let tempPasswordExpires = null;
