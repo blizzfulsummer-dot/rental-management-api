@@ -7,7 +7,8 @@ import { listTenants, getTenant, updateTenant, deleteTenant } from './tenant';
 
 const ALLOWED_ORIGINS = [
   'https://test-front-env.pages.dev',
-  'https://my-other-site.pages.dev'
+  'https://my-other-site.pages.dev',
+  'https://rental-management.ehexibit.com'
 ];
 
 // Helper to attach CORS headers
