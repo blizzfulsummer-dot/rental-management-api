@@ -1,5 +1,5 @@
 {
-	"name": "rental-management",
+	"name": "rental-management-api",
 	"main": "src/worker.js",
 	"workers_dev": true,
 	"compatibility_date": "2026-01-26",
