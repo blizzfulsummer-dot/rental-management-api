@@ -214,23 +214,33 @@ async function signup(request, env) {
   // If role is tenant, insert into tenants table
   if (r === 'tenant') {
   try {
-    await env.DB
-      .prepare(`
-        INSERT INTO tenants 
-          (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .bind(
-        userId,
-        balance,
-        deposit,
-        rent_amount,
-        billing_cycle,
-        leased_unit,
-        onboard_date,
-        new Date().toISOString()
-      )
-      .run();
+   // Convert numeric fields explicitly
+      const tenantBalance = Number(balance);
+      const tenantDeposit = Number(deposit);  
+      const tenantRent = Number(rent_amount);
+      const tenantOnboardDate = new Date(onboard_date).toISOString();
+
+  // Optional default for billing_cycle
+      const tenantBillingCycle = billing_cycle || "monthly";
+
+await env.DB
+  .prepare(`
+    INSERT INTO tenants 
+      (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  .bind(
+    userId,
+    tenantBalance,
+    tenantDeposit,
+    tenantRent,
+    tenantBillingCycle,
+    leased_unit,
+    tenantOnboardDate,
+    new Date().toISOString()
+  )
+  .run();
+
   } catch (err) {
     // This catches D1-specific errors
     console.error('Tenant insert failed:', err);
