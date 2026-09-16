@@ -201,8 +201,10 @@ export default {
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8787';
-        const WS_BASE = 'ws://localhost:8787';
+        const protocol = window.location.protocol;
+        const host = window.location.host;
+        const API_BASE = protocol + '//' + host;
+        const WS_BASE = (protocol === 'https:' ? 'wss' : 'ws') + '://' + host;
         let jwt = null;
         let ws = null;
 
