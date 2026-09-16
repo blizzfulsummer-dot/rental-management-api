@@ -96,7 +96,7 @@ export async function signup(request, env) {
     return json({ success: true, message: 'User registered successfully', tempPassword });
   } catch (error) {
     console.error('Signup error:', error);
-    return json({ error: 'Failed to create user' }, 500);
+    return json({ error: 'Failed to create user', details: error.message }, 500);
   }
 }
 

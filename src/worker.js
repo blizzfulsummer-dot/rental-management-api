@@ -122,34 +122,203 @@ export default {
     // Serve static files (index.html, etc.)
     if (url.pathname === '/' || url.pathname === '/index.html') {
       try {
-        const file = await env.ASSETS.get('index.html');
-        if (file) {
-          return new Response(file, {
-            status: 200,
-            headers: {
-              'Content-Type': 'text/html',
-              'Cache-Control': 'public, max-age=3600'
-            }
-          });
+        // Try ASSETS binding first (production)
+        if (env.ASSETS) {
+          const file = await env.ASSETS.get('index.html');
+          if (file) {
+            return new Response(file, {
+              status: 200,
+              headers: {
+                'Content-Type': 'text/html',
+                'Cache-Control': 'public, max-age=3600'
+              }
+            });
+          }
         }
       } catch (e) {
-        console.log('No assets binding, using fallback HTML');
+        // Fall through to serve fallback
       }
-    }
+      
+      // Fallback HTML for development (no ASSETS binding)
+      const fallbackHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .container { background: white; border-radius: 12px; padding: 40px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); width: 100%; max-width: 400px; }
+        h1 { color: #333; margin-bottom: 10px; font-size: 28px; }
+        p { color: #666; margin-bottom: 30px; font-size: 14px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; color: #333; margin-bottom: 8px; font-weight: 500; }
+        input { width: 100%; padding: 12px 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        button { width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .error { color: #e74c3c; font-size: 14px; margin-top: 15px; padding: 10px; background: #fadbd8; border-radius: 6px; display: none; }
+        .error.show { display: block; }
+        .success { color: #27ae60; font-size: 14px; margin-top: 15px; padding: 10px; background: #d4edda; border-radius: 6px; display: none; }
+        .success.show { display: block; }
+        .dashboard { display: none; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loginForm">
+            <h1>🏠 Smart Home</h1>
+            <p>Property Management System</p>
+            
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" placeholder="admin@example.com" value="admin@example.com">
+            </div>
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Password" value="AdminPass123!">
+            </div>
+
+            <button id="loginBtn" onclick="handleLogin()">Sign In</button>
+
+            <div class="error" id="loginError"></div>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+                <p><strong>Demo Credentials:</strong></p>
+                <p>Email: admin@example.com</p>
+                <p>Password: AdminPass123!</p>
+            </div>
+        </div>
+
+        <div id="dashboard" class="dashboard">
+            <h1>✅ Connected!</h1>
+            <p id="status">Initializing...</p>
+            <div id="log" style="margin-top: 20px; max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border-radius: 6px; font-size: 12px; font-family: monospace;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8787';
+        const WS_BASE = 'ws://localhost:8787';
+        let jwt = null;
+        let ws = null;
+
+        function log(msg) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML = \`<div>[\${time}] \${msg}</div>\` + logDiv.innerHTML;
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const btn = document.getElementById('loginBtn');
+            const errorDiv = document.getElementById('loginError');
+
+            btn.disabled = true;
+            btn.textContent = 'Signing in...';
+            errorDiv.classList.remove('show');
+
+            try {
+                const response = await fetch(\`\${API_BASE}/api/login\`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Login failed');
+                }
+
+                jwt = data.access_token;
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                log('✓ Logged in successfully');
+                
+                await connectWebSocket();
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.classList.add('show');
+                log('✗ ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Sign In';
+            }
+        }
+
+        async function connectWebSocket() {
+            try {
+                log('Requesting WebSocket ticket...');
+
+                const ticketResponse = await fetch(\`\${API_BASE}/ws/ticket\`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': \`Bearer \${jwt}\`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        houseId: 1,
+                        clientType: 'web'
+                    })
+                });
+
+                if (!ticketResponse.ok) {
+                    throw new Error('Failed to get ticket: ' + ticketResponse.statusText);
+                }
+
+                const { ticket } = await ticketResponse.json();
+                log('✓ Ticket received (60s validity)');
+
+                const wsUrl = \`\${WS_BASE}/ws/house/1?ticket=\${ticket}\`;
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    log('✓ WebSocket connected');
+                    document.getElementById('status').textContent = '🟢 Connected to Smart Home';
+                };
+
+                ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    log(\`→ \${msg.type}: \${JSON.stringify(msg).substring(0, 50)}...\`);
+                };
+
+                ws.onerror = (error) => {
+                    log('✗ WebSocket error: ' + error.message);
+                };
+
+                ws.onclose = () => {
+                    log('✗ WebSocket closed');
+                };
+            } catch (error) {
+                log('✗ Connection error: ' + error.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('email').focus();
+        });
+    </script>
+</body>
+</html>`;
+      
+      return new Response(fallbackHTML, {
+        status: 200,
         headers: {
-          'Access-Control-Allow-Origin': allowOrigin,
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          'Content-Type': 'text/html',
+          'Cache-Control': 'no-cache'
         }
       });
     }
 
-    const url = new URL(request.url);
-    if (shouldRateLimit(url.pathname)) {
+    // Skip rate limiting in development (localhost)
+    const isDevelopment = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+
+    if (!isDevelopment && shouldRateLimit(url.pathname)) {
       const rateLimitKey = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for') || 'anonymous';
       const result = authRateLimiter(rateLimitKey);
       if (!result.ok) {

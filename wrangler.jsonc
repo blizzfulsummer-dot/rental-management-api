@@ -29,9 +29,14 @@
 		"bindings": [
 			{
 				"name": "HOUSE_ROOM",
-				"class_name": "HouseRoom",
-				"environment": "production"
+				"class_name": "HouseRoom"
 			}
 		]
-	}
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": ["HouseRoom"]
+		}
+	]
 }
