@@ -21,5 +21,14 @@
 			"binding": "DB",
 			"database_id": "e9d8368d-f999-430a-9cd0-be7e33007c10"
 		}
-	]
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "HOUSE_ROOM",
+				"class_name": "HouseRoom",
+				"environment": "production"
+			}
+		]
+	}
 }

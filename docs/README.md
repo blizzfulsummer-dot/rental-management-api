@@ -67,6 +67,29 @@ Complete documentation for the Rental Management API project.
    - Release process
    - Documentation standards
 
+8. **[WebSocket System](08-WEBSOCKET.md)** - Real-time communication guide
+   - Architecture overview
+   - Security model
+   - API endpoints for tickets
+   - WebSocket connection protocol
+   - Message types and format
+   - Client implementation examples
+   - Database schema for WebSocket
+   - Performance notes
+   - Future enhancements
+
+9. **[WebSocket Setup Guide](09-WEBSOCKET_SETUP.md)** - Integration instructions
+   - Prerequisites
+   - Integration checklist
+   - Database setup
+   - Code integration
+   - Configuration
+   - Customization guide
+   - Testing procedures
+   - Deployment steps
+   - Troubleshooting
+   - IoT device authentication
+
 ---
 
 ## Quick Navigation
