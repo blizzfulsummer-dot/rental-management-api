@@ -8,7 +8,8 @@
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
 		"build": "esbuild src/worker.js --bundle --format=esm --outfile=dist/worker.js",
-		"test": "node --test"
+		"test": "node --test",
+		"device:sim": "node device-simulator.js"
 	},
 	"devDependencies": {
 		"esbuild": "^0.27.2",
@@ -16,6 +17,7 @@
 	},
 	"dependencies": {
 		"argon2-browser": "^1.18.0",
-		"jose": "^6.1.3"
+		"jose": "^6.1.3",
+		"ws": "^8.16.0"
 	}
 }

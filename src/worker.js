@@ -101,8 +101,41 @@ async function handleHouseRoomWebSocket(request, env, url) {
 }
 
 export { HouseRoom };
+
+export default {
   async fetch(request, env) {
     const allowOrigin = getAllowOrigin(request);
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': allowOrigin,
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
+      });
+    }
+
+    const url = new URL(request.url);
+
+    // Serve static files (index.html, etc.)
+    if (url.pathname === '/' || url.pathname === '/index.html') {
+      try {
+        const file = await env.ASSETS.get('index.html');
+        if (file) {
+          return new Response(file, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/html',
+              'Cache-Control': 'public, max-age=3600'
+            }
+          });
+        }
+      } catch (e) {
+        console.log('No assets binding, using fallback HTML');
+      }
+    }
 
     if (request.method === 'OPTIONS') {
       return new Response(null, {

@@ -9,6 +9,9 @@
 			"enabled": true
 		}
 	},
+	"site": {
+		"bucket": "public"
+	},
 	"secrets_store_secrets": [
 		{
 			"binding": "JWT_SCRT",

@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* ============= LOGIN SCREEN ============= */
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-card h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .login-card p {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #333;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 15px;
+            padding: 10px;
+            background: #fadbd8;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        /* ============= DASHBOARD SCREEN ============= */
+        .dashboard-screen {
+            display: none;
+        }
+
+        .dashboard-header {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dashboard-header h1 {
+            color: #333;
+            font-size: 24px;
+        }
+
+        .header-info {
+            text-align: right;
+        }
+
+        .header-info p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #c0392b;
+        }
+
+        /* ============= STATUS & ALERTS ============= */
+        .status-bar {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e74c3c;
+        }
+
+        .status-indicator.connected {
+            background: #27ae60;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .status-text {
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-text.connected {
+            color: #27ae60;
+        }
+
+        .status-text.error {
+            color: #e74c3c;
+        }
+
+        /* ============= DEVICES GRID ============= */
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .device-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .device-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+
+        .device-info h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .device-type {
+            color: #999;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .device-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .device-status.online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .device-status.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .device-body {
+            margin-bottom: 15px;
+        }
+
+        .device-prop {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .device-prop strong {
+            color: #333;
+        }
+
+        .device-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .device-btn {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .device-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .device-btn.danger {
+            background: #ffe0e0;
+            color: #c0392b;
+            border-color: #e74c3c;
+        }
+
+        .device-btn.danger:hover {
+            background: #e74c3c;
+            color: white;
+            border-color: #c0392b;
+        }
+
+        .device-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* ============= EMPTY STATE ============= */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: 12px;
+            color: #999;
+        }
+
+        .empty-state h2 {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        /* ============= MESSAGE LOG ============= */
+        .message-log {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .message-log h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .message-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 3px solid #667eea;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
+            font-family: 'Courier New', monospace;
+        }
+
+        .message-item.system {
+            border-left-color: #27ae60;
+            background: #d4edda;
+        }
+
+        .message-item.error {
+            border-left-color: #e74c3c;
+            background: #f8d7da;
+        }
+
+        .message-time {
+            color: #999;
+            font-size: 11px;
+        }
+
+        /* ============= RESPONSIVE ============= */
+        @media (max-width: 768px) {
+            .login-card {
+                padding: 30px 20px;
+            }
+
+            .dashboard-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .header-info {
+                text-align: center;
+            }
+
+            .devices-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .device-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            background: currentColor;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: loading 1.4s infinite;
+        }
+
+        @keyframes loading {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- ============= LOGIN SCREEN ============= -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-card">
+            <h1>Smart Home</h1>
+            <p>Property Management System</p>
+            
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" placeholder="admin@example.com" value="admin@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Password" value="AdminPass123!">
+            </div>
+
+            <button class="login-btn" id="loginBtn" onclick="handleLogin()">Sign In</button>
+
+            <div class="error-message" id="loginError"></div>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+                <p><strong>Demo Credentials:</strong></p>
+                <p>Email: admin@example.com</p>
+                <p>Password: AdminPass123!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============= DASHBOARD SCREEN ============= -->
+    <div class="dashboard-screen" id="dashboardScreen">
+        <div class="dashboard-header">
+            <h1>🏠 Smart Home Dashboard</h1>
+            <div class="header-info">
+                <p><strong id="userName">User</strong></p>
+                <p id="connectionStatus" style="color: #e74c3c;">Connecting<span class="loading">.</span><span class="loading">.</span><span class="loading">.</span></p>
+                <button class="logout-btn" onclick="handleLogout()">Logout</button>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span class="status-text" id="statusText">Connecting to WebSocket...</span>
+        </div>
+
+        <div id="devicesContainer">
+            <div class="empty-state">
+                <h2>Loading devices...</h2>
+            </div>
+        </div>
+
+        <div class="message-log">
+            <h3>Activity Log</h3>
+            <div id="messageLog"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============= CONFIG =============
+        const API_BASE = 'http://localhost:8787';
+        const WS_BASE = 'ws://localhost:8787';
+
+        // ============= STATE =============
+        let state = {
+            jwt: null,
+            userId: null,
+            userName: null,
+            houseId: 1,
+            sessionId: null,
+            ws: null,
+            devices: new Map(),
+            sessions: new Map()
+        };
+
+        // ============= LOGGING =============
+        function addMessage(message, type = 'info') {
+            const log = document.getElementById('messageLog');
+            const item = document.createElement('div');
+            const now = new Date().toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit',
+                hour12: true 
+            });
+
+            item.className = `message-item ${type}`;
+            item.innerHTML = `<span class="message-time">${now}</span> ${escapeHtml(message)}`;
+            
+            log.insertBefore(item, log.firstChild);
+
+            // Keep only last 50 messages
+            while (log.children.length > 50) {
+                log.removeChild(log.lastChild);
+            }
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // ============= LOGIN =============
+        async function handleLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const errorDiv = document.getElementById('loginError');
+
+            if (!email || !password) {
+                showError('Please enter email and password', errorDiv);
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Signing in...';
+            errorDiv.classList.remove('show');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Login failed');
+                }
+
+                state.jwt = data.access_token;
+                state.userId = data.user.id;
+                state.userName = data.user.email;
+
+                // Show dashboard
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('dashboardScreen').style.display = 'block';
+                document.getElementById('userName').textContent = state.userName;
+
+                addMessage(`✓ Logged in as ${state.userName}`, 'system');
+
+                // Connect to WebSocket
+                await connectToWebSocket();
+            } catch (error) {
+                showError(error.message, errorDiv);
+                addMessage(`✗ Login failed: ${error.message}`, 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
+            }
+        }
+
+        function showError(message, element) {
+            element.textContent = message;
+            element.classList.add('show');
+        }
+
+        // ============= WEBSOCKET =============
+        async function connectToWebSocket() {
+            try {
+                addMessage('Requesting WebSocket ticket...', 'system');
+
+                // Get ticket
+                const ticketResponse = await fetch(`${API_BASE}/ws/ticket`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.jwt}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        houseId: state.houseId,
+                        clientType: 'web'
+                    })
+                });
+
+                if (!ticketResponse.ok) {
+                    throw new Error('Failed to get WebSocket ticket');
+                }
+
+                const { ticket, sessionId } = await ticketResponse.json();
+                state.sessionId = sessionId;
+
+                addMessage(`✓ Ticket issued (expires in 60s)`, 'system');
+                addMessage(`Connecting to house room...`, 'system');
+
+                // Connect to WebSocket
+                const wsUrl = `${WS_BASE}/ws/house/${state.houseId}?ticket=${ticket}`;
+                state.ws = new WebSocket(wsUrl);
+
+                state.ws.onopen = () => {
+                    addMessage('✓ WebSocket connected!', 'system');
+                    updateStatus('Connected', true);
+                };
+
+                state.ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    handleWebSocketMessage(message);
+                };
+
+                state.ws.onerror = (error) => {
+                    addMessage(`✗ WebSocket error: ${error.message || 'Unknown error'}`, 'error');
+                    updateStatus('Error', false);
+                };
+
+                state.ws.onclose = () => {
+                    addMessage('✗ WebSocket disconnected', 'error');
+                    updateStatus('Disconnected', false);
+                };
+
+            } catch (error) {
+                addMessage(`✗ WebSocket connection failed: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, false);
+            }
+        }
+
+        function updateStatus(text, connected) {
+            const statusText = document.getElementById('statusText');
+            const statusIndicator = document.getElementById('statusIndicator');
+            const connectionStatus = document.getElementById('connectionStatus');
+
+            statusText.textContent = text;
+            statusText.className = `status-text ${connected ? 'connected' : 'error'}`;
+
+            if (connected) {
+                statusIndicator.classList.add('connected');
+                connectionStatus.textContent = '🟢 Connected';
+                connectionStatus.style.color = '#27ae60';
+            } else {
+                statusIndicator.classList.remove('connected');
+                connectionStatus.textContent = '🔴 Disconnected';
+                connectionStatus.style.color = '#e74c3c';
+            }
+        }
+
+        function handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'connected':
+                    addMessage(`✓ Joined house room`, 'system');
+                    requestDeviceList();
+                    break;
+
+                case 'user_joined':
+                    state.sessions.set(message.sessionId, {
+                        userId: message.userId,
+                        clientType: message.clientType
+                    });
+                    addMessage(`👤 ${message.clientType === 'device' ? '📱 Device' : 'User'} joined (ID: ${message.userId})`, 'system');
+                    break;
+
+                case 'user_left':
+                    state.sessions.delete(message.sessionId);
+                    addMessage(`👤 User/Device left (ID: ${message.userId})`, 'system');
+                    break;
+
+                case 'get_devices':
+                    if (message.devices) {
+                        state.devices.clear();
+                        message.devices.forEach(d => state.devices.set(d.id, d));
+                        renderDevices();
+                        addMessage(`✓ Loaded ${message.devices.length} device(s)`, 'system');
+                    }
+                    break;
+
+                case 'device_update':
+                    const device = state.devices.get(message.deviceId);
+                    if (device) {
+                        device.status = message.status;
+                        device.lastUpdate = message.timestamp;
+                        renderDevices();
+                        addMessage(`📊 ${message.deviceName || 'Device'}: ${message.status}`, 'info');
+                    }
+                    break;
+
+                case 'command_routed':
+                    addMessage(`✓ Command sent to ${message.deviceName || 'device'}`, 'system');
+                    break;
+
+                case 'error':
+                    addMessage(`✗ Error: ${message.message}`, 'error');
+                    break;
+
+                default:
+                    console.log('Unknown message type:', message.type);
+            }
+        }
+
+        function requestDeviceList() {
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({
+                    type: 'get_devices'
+                }));
+            }
+        }
+
+        // ============= DEVICE MANAGEMENT =============
+        function renderDevices() {
+            const container = document.getElementById('devicesContainer');
+
+            if (state.devices.size === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h2>No Devices</h2>
+                        <p>No devices connected to this house yet.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="devices-grid">';
+
+            state.devices.forEach((device, id) => {
+                const isOnline = device.status === 'online' || device.status === 'active';
+                html += `
+                    <div class="device-card">
+                        <div class="device-header">
+                            <div class="device-info">
+                                <h3>${escapeHtml(device.device_name || `Device ${id}`)}</h3>
+                                <div class="device-type">${escapeHtml(device.device_type || 'Unknown')}</div>
+                            </div>
+                            <span class="device-status ${isOnline ? 'online' : 'offline'}">
+                                ${isOnline ? '🟢 Online' : '🔴 Offline'}
+                            </span>
+                        </div>
+
+                        <div class="device-body">
+                            <div class="device-prop">
+                                <strong>Device ID:</strong>
+                                <span>${device.id}</span>
+                            </div>
+                            <div class="device-prop">
+                                <strong>Status:</strong>
+                                <span>${escapeHtml(device.status || 'Unknown')}</span>
+                            </div>
+                            <div class="device-prop">
+                                <strong>Last Update:</strong>
+                                <span>${device.lastUpdate ? new Date(device.lastUpdate).toLocaleTimeString() : 'Never'}</span>
+                            </div>
+                        </div>
+
+                        <div class="device-actions">
+                            <button class="device-btn" onclick="sendCommand(${id}, 'on')">Turn ON</button>
+                            <button class="device-btn danger" onclick="sendCommand(${id}, 'off')">Turn OFF</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function sendCommand(deviceId, command) {
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                const device = state.devices.get(deviceId);
+                state.ws.send(JSON.stringify({
+                    type: 'device_command',
+                    deviceId: deviceId,
+                    command: command,
+                    timestamp: new Date().toISOString()
+                }));
+                addMessage(`📤 Sent '${command}' command to ${device?.device_name || 'device'}`, 'info');
+            }
+        }
+
+        // ============= LOGOUT =============
+        function handleLogout() {
+            if (state.ws) {
+                state.ws.close();
+            }
+
+            state = {
+                jwt: null,
+                userId: null,
+                userName: null,
+                houseId: 1,
+                sessionId: null,
+                ws: null,
+                devices: new Map(),
+                sessions: new Map()
+            };
+
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('dashboardScreen').style.display = 'none';
+            document.getElementById('email').value = 'admin@example.com';
+            document.getElementById('password').value = 'AdminPass123!';
+            document.getElementById('loginError').classList.remove('show');
+
+            addMessage('Logged out', 'system');
+        }
+
+        // ============= INITIAL SETUP =============
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('email').focus();
+        });
+
+        // Auto-login for testing
+        // Uncomment to auto-login:
+        // setTimeout(() => handleLogin(), 500);
+    </script>
+</body>
+</html>
