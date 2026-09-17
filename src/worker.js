@@ -237,7 +237,7 @@ export default {
                     throw new Error(data.message || 'Login failed');
                 }
 
-                jwt = data.access_token;
+                jwt = data.accessToken;
                 document.getElementById('loginForm').style.display = 'none';
                 document.getElementById('dashboard').style.display = 'block';
                 log('✓ Logged in successfully');
