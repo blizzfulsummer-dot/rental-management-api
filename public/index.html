@@ -483,8 +483,8 @@
 
     <script>
         // ============= CONFIG =============
-        const API_BASE = 'http://localhost:8787';
-        const WS_BASE = 'ws://localhost:8787';
+        const API_BASE = 'https//api.ehexibit.com';
+        const WS_BASE = 'ws://api.ehexibit.com';
 
         // ============= STATE =============
         let state = {
@@ -560,7 +560,7 @@
                     throw new Error(data.message || 'Login failed');
                 }
 
-                state.jwt = data.access_token;
+                state.jwt = data.accessToken;
                 state.userId = data.user.id;
                 state.userName = data.user.email;
 
