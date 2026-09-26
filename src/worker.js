@@ -53,7 +53,7 @@ function generateUUID() {
  */
 async function handleHouseRoomWebSocket(request, env, url) {
   // Only allow WebSocket upgrade
-  if (request.headers.get('Upgrade') !== 'websocket') {
+  if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
     return json({ error: 'Expected WebSocket' }, 400);
   }
 
@@ -98,6 +98,114 @@ async function handleHouseRoomWebSocket(request, env, url) {
     method: request.method,
     headers: request.headers
   }));
+}
+
+/**
+ * Handle ESP32 device WebSocket connection
+ *
+ * Stage 1:
+ * - Accept WSS connection
+ * - No authentication yet
+ * - Send connection confirmation
+ * - Echo received JSON
+ */
+async function handleDeviceWebSocket(request) {
+
+  if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+    return json(
+      { error: 'Expected WebSocket upgrade' },
+      400
+    );
+  }
+
+  const pair = new WebSocketPair();
+
+  const client = pair[0];
+  const server = pair[1];
+
+  server.accept();
+
+  console.log('[DEVICE-WS] Device connected');
+
+  // Send connection confirmation
+  server.send(JSON.stringify({
+    type: 'connected',
+    success: true,
+    message: 'Device WebSocket connected',
+    timestamp: Date.now()
+  }));
+
+  // Receive messages from ESP32
+  server.addEventListener('message', event => {
+
+    try {
+
+      console.log('[DEVICE-WS] Message received:', event.data);
+
+      let message;
+
+      try {
+        message = JSON.parse(String(event.data));
+      } catch (error) {
+
+        server.send(JSON.stringify({
+          success: false,
+          error: 'Invalid JSON'
+        }));
+
+        return;
+      }
+
+      // Echo response for Stage 1 testing
+      server.send(JSON.stringify({
+        success: true,
+        type: 'response',
+        message: 'Message received by Cloudflare Worker',
+        received: message,
+        timestamp: Date.now()
+      }));
+
+    } catch (error) {
+
+      console.error(
+        '[DEVICE-WS] Message error:',
+        error
+      );
+
+      try {
+
+        server.send(JSON.stringify({
+          success: false,
+          error: 'Internal WebSocket error'
+        }));
+
+      } catch (_) {}
+    }
+  });
+
+  server.addEventListener('close', event => {
+
+    console.log(
+      '[DEVICE-WS] Device disconnected:',
+      event.code,
+      event.reason || ''
+    );
+
+  });
+
+  server.addEventListener('error', error => {
+
+    console.error(
+      '[DEVICE-WS] WebSocket error:',
+      error
+    );
+
+  });
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client
+  });
 }
 
 export { HouseRoom };
@@ -360,6 +468,14 @@ export default {
       // WebSocket ticket endpoint
       if (url.pathname === '/ws/ticket' && request.method === 'POST') {
         return withCors(await issueWebSocketTicket(request, env), allowOrigin);
+      }
+
+      // ESP32 device WebSocket
+      if (
+        url.pathname === '/ws/device' &&
+        request.method === 'GET'
+      ) {
+        return handleDeviceWebSocket(request);
       }
 
       // WebSocket handler for house rooms
