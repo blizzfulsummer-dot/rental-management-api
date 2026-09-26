@@ -30,13 +30,21 @@
 			{
 				"name": "HOUSE_ROOM",
 				"class_name": "HouseRoom"
-			}
+			},
+			{
+      			"name": "DEVICE_ROOM",
+      			"class_name": "DeviceRoom"
+    		}
 		]
 	},
 	"migrations": [
 		{
 			"tag": "v1",
 			"new_sqlite_classes": ["HouseRoom"]
-		}
+		},
+  		{
+    		"tag": "v2",
+    		"new_sqlite_classes": ["DeviceRoom"]
+  		}
 	]
 }

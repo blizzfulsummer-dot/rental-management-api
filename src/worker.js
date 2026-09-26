@@ -3,6 +3,7 @@ import { getAuthUser, login, refreshToken, requestReset, resetPassword, signup, 
 import { createRateLimiter } from './lib/rateLimit.js';
 import { issueWebSocketTicket, validateWebSocketTicket } from './lib/websocketTicket.js';
 import { HouseRoom } from './houseRoom.js';
+import { DeviceRoom } from './deviceRoom.js';
 
 const ALLOWED_ORIGINS = [
   'https://test-front-env.pages.dev',
@@ -109,106 +110,56 @@ async function handleHouseRoomWebSocket(request, env, url) {
  * - Send connection confirmation
  * - Echo received JSON
  */
-async function handleDeviceWebSocket(request) {
+async function handleDeviceWebSocket(
+  request,
+  env
+) {
 
-  if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+  if (
+    request.headers
+      .get("Upgrade")
+      ?.toLowerCase() !== "websocket"
+  ) {
+
     return json(
-      { error: 'Expected WebSocket upgrade' },
-      400
+      {
+        error:
+          "Expected WebSocket upgrade"
+      },
+      426
     );
   }
 
-  const pair = new WebSocketPair();
+  console.log(
+    "[DEVICE-WS] Routing connection to DeviceRoom"
+  );
 
-  const client = pair[0];
-  const server = pair[1];
+  // ----------------------------------------------------------
+  // Temporary Stage 1.5 ID
+  // ----------------------------------------------------------
+  //
+  // For now every device connects to the same DeviceRoom.
+  //
+  // Later:
+  //
+  // deviceId -> specific DeviceRoom
+  //
+  // ----------------------------------------------------------
 
-  server.accept();
-
-  console.log('[DEVICE-WS] Device connected');
-
-  // Send connection confirmation
-  server.send(JSON.stringify({
-    type: 'connected',
-    success: true,
-    message: 'Device WebSocket connected',
-    timestamp: Date.now()
-  }));
-
-  // Receive messages from ESP32
-  server.addEventListener('message', event => {
-
-    try {
-
-      console.log('[DEVICE-WS] Message received:', event.data);
-
-      let message;
-
-      try {
-        message = JSON.parse(String(event.data));
-      } catch (error) {
-
-        server.send(JSON.stringify({
-          success: false,
-          error: 'Invalid JSON'
-        }));
-
-        return;
-      }
-
-      // Echo response for Stage 1 testing
-      server.send(JSON.stringify({
-        success: true,
-        type: 'response',
-        message: 'Message received by Cloudflare Worker',
-        received: message,
-        timestamp: Date.now()
-      }));
-
-    } catch (error) {
-
-      console.error(
-        '[DEVICE-WS] Message error:',
-        error
-      );
-
-      try {
-
-        server.send(JSON.stringify({
-          success: false,
-          error: 'Internal WebSocket error'
-        }));
-
-      } catch (_) {}
-    }
-  });
-
-  server.addEventListener('close', event => {
-
-    console.log(
-      '[DEVICE-WS] Device disconnected:',
-      event.code,
-      event.reason || ''
+  const id =
+    env.DEVICE_ROOM.idFromName(
+      "device-room"
     );
 
-  });
+  const stub =
+    env.DEVICE_ROOM.get(id);
 
-  server.addEventListener('error', error => {
-
-    console.error(
-      '[DEVICE-WS] WebSocket error:',
-      error
-    );
-
-  });
-
-  return new Response(null, {
-    status: 101,
-    webSocket: client
-  });
+  return stub.fetch(
+    request
+  );
 }
 
-export { HouseRoom };
+export { HouseRoom , DeviceRoom };
 
 export default {
   async fetch(request, env) {
