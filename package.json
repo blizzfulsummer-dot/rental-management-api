@@ -7,7 +7,7 @@
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
-		"build": "esbuild src/worker.js --bundle --format=esm --outfile=dist/worker.js",
+		"build": "wrangler deploy --dry-run",
 		"test": "node --test",
 		"device:sim": "node device-simulator.js"
 	},
