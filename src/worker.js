@@ -426,7 +426,7 @@ export default {
         url.pathname === '/ws/device' &&
         request.method === 'GET'
       ) {
-        return handleDeviceWebSocket(request);
+        return handleDeviceWebSocket(request,env);
       }
 
       // WebSocket handler for house rooms
