@@ -364,3 +364,76 @@ app.post("/api/houses", async (c) => {
         );
     }
 });
+
+app.get("/api/houses", async (c) => {
+    try {
+        const user = await getAuthUser(c.req.raw, c.env);
+
+        if (!user) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Unauthorized"
+                },
+                401
+            );
+        }
+
+        let result;
+
+        if (user.role === "admin") {
+            // Admin can see all houses
+            result = await c.env.DB
+                .prepare(`
+                    SELECT
+                        id,
+                        house_uid,
+                        name,
+                        address,
+                        owner_id,
+                        rent_amount,
+                        date_occupied,
+                        created_at
+                    FROM houses
+                    ORDER BY id DESC
+                `)
+                .all();
+
+        } else {
+            // Regular user can only see houses they own
+            result = await c.env.DB
+                .prepare(`
+                    SELECT
+                        id,
+                        house_uid,
+                        name,
+                        address,
+                        owner_id,
+                        rent_amount,
+                        date_occupied,
+                        created_at
+                    FROM houses
+                    WHERE owner_id = ?
+                    ORDER BY id DESC
+                `)
+                .bind(user.id)
+                .all();
+        }
+
+        return c.json({
+            success: true,
+            houses: result.results || []
+        });
+
+    } catch (error) {
+        console.error("[HOUSE LIST ERROR]", error);
+
+        return c.json(
+            {
+                success: false,
+                message: "Failed to retrieve houses"
+            },
+            500
+        );
+    }
+});
