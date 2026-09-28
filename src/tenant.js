@@ -230,3 +230,137 @@ function json(data, status = 200) {
     headers: { 'Content-Type': 'application/json' }
   });
 }
+
+
+
+function generateHouseUid() {
+    const bytes = crypto.getRandomValues(new Uint8Array(5));
+
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    let code = "";
+
+    for (const byte of bytes) {
+        code += chars[byte % chars.length];
+    }
+
+    return `HSE-${code}`;
+}
+
+app.post("/api/houses", async (c) => {
+    try {
+        const user = await getAuthUser(c.req.raw, c.env);
+
+        if (!user) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Unauthorized"
+                },
+                401
+            );
+        }
+
+        // For now, only admins can create houses.
+        if (user.role !== "admin") {
+            return c.json(
+                {
+                    success: false,
+                    message: "Only administrators can create houses"
+                },
+                403
+            );
+        }
+
+        const body = await c.req.json();
+
+        const name = typeof body.name === "string"
+            ? body.name.trim()
+            : "";
+
+        const address = typeof body.address === "string"
+            ? body.address.trim()
+            : null;
+
+        if (!name) {
+            return c.json(
+                {
+                    success: false,
+                    message: "House name is required"
+                },
+                400
+            );
+        }
+
+        let houseUid;
+        let existing;
+
+        // Generate a unique external house UID.
+        do {
+            houseUid = generateHouseUid();
+
+            existing = await c.env.DB
+                .prepare(`
+                    SELECT id
+                    FROM houses
+                    WHERE house_uid = ?
+                    LIMIT 1
+                `)
+                .bind(houseUid)
+                .first();
+
+        } while (existing);
+
+        const result = await c.env.DB
+            .prepare(`
+                INSERT INTO houses (
+                    name,
+                    address,
+                    owner_id,
+                    house_uid
+                )
+                VALUES (?, ?, ?, ?)
+            `)
+            .bind(
+                name,
+                address,
+                user.id,
+                houseUid
+            )
+            .run();
+
+        const house = await c.env.DB
+            .prepare(`
+                SELECT
+                    id,
+                    house_uid,
+                    name,
+                    address,
+                    owner_id,
+                    created_at
+                FROM houses
+                WHERE id = ?
+            `)
+            .bind(result.meta.last_row_id)
+            .first();
+
+        return c.json(
+            {
+                success: true,
+                house
+            },
+            201
+        );
+
+    } catch (error) {
+        console.error("[HOUSE CREATE ERROR]", error);
+
+        return c.json(
+            {
+                success: false,
+                message: "Failed to create house"
+            },
+            500
+        );
+    }
+});
