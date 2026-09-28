@@ -379,11 +379,12 @@ app.get("/api/houses", async (c) => {
             );
         }
 
-        let result;
+        // ========================================================
+        // ADMIN
+        // ========================================================
 
         if (user.role === "admin") {
-            // Admin can see all houses
-            result = await c.env.DB
+            const result = await c.env.DB
                 .prepare(`
                     SELECT
                         id,
@@ -399,31 +400,79 @@ app.get("/api/houses", async (c) => {
                 `)
                 .all();
 
-        } else {
-            // Regular user can only see houses they own
-            result = await c.env.DB
+            return c.json({
+                success: true,
+                houses: result.results || []
+            });
+        }
+
+        // ========================================================
+        // TENANT
+        // ========================================================
+
+        if (user.role === "tenant") {
+            const result = await c.env.DB
                 .prepare(`
                     SELECT
-                        id,
-                        house_uid,
-                        name,
-                        address,
-                        owner_id,
-                        rent_amount,
-                        date_occupied,
-                        created_at
-                    FROM houses
-                    WHERE owner_id = ?
-                    ORDER BY id DESC
+                        h.id,
+                        h.house_uid,
+                        h.name,
+                        h.address,
+                        r.id AS room_id,
+                        r.name AS room_name,
+                        r.rent_amount,
+                        r.date_occupied
+                    FROM tenants t
+                    INNER JOIN rooms r
+                        ON r.id = t.room_id
+                    INNER JOIN houses h
+                        ON h.id = r.house_id
+                    WHERE t.user_id = ?
+                    ORDER BY h.id DESC
                 `)
                 .bind(user.id)
                 .all();
+
+            return c.json({
+                success: true,
+                houses: result.results || []
+            });
         }
 
-        return c.json({
-            success: true,
-            houses: result.results || []
-        });
+        // ========================================================
+        // USER
+        // ========================================================
+
+        if (user.role === "user") {
+            const result = await c.env.DB
+                .prepare(`
+                    SELECT
+                        h.id,
+                        h.house_uid,
+                        h.name,
+                        h.address,
+                        h.owner_id,
+                        h.created_at
+                    FROM houses h
+                    WHERE h.owner_id = ?
+                    ORDER BY h.id DESC
+                `)
+                .bind(user.id)
+                .all();
+
+            return c.json({
+                success: true,
+                houses: result.results || []
+            });
+        }
+
+        return c.json(
+            {
+                success: false,
+                message: "Invalid user role"
+            },
+            403
+        );
 
     } catch (error) {
         console.error("[HOUSE LIST ERROR]", error);
