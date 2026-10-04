@@ -21,6 +21,12 @@ import { createRateLimiter } from './lib/rateLimit.js';
 import { issueDeviceWebSocketTicket, issueWebSocketTicket, validateWebSocketTicket } from './lib/websocketTicket.js';
 import { HouseRoom } from './houseRoom.js';
 import { DeviceRoom } from './deviceRoom.js';
+import {
+  cancelFingerprintEnrollment,
+  listFingerprintEnrollments,
+  removeFingerprintEnrollment,
+  startFingerprintEnrollment
+} from './fingerprints.js';
 
 const ALLOWED_ORIGINS = [
   'https://test-front-env.pages.dev',
@@ -298,7 +304,7 @@ export default {
     }
 
     const API_BASE = resolveApiBase();
-    const state = { jwt: '', profile: null, role: null, houses: [], tenants: [], devices: [], selectedHouseId: null, activeView: 'overview' };
+    const state = { jwt: '', profile: null, role: null, houses: [], tenants: [], devices: [], fingerprints: {}, selectedHouseId: null, activeView: 'overview' };
     const loginScreen = document.getElementById('loginScreen');
     const dashboardScreen = document.getElementById('dashboardScreen');
     const loginAlert = document.getElementById('loginAlert');
@@ -414,7 +420,14 @@ export default {
       const html = visibleDevices.map(function(device) {
         const online = ['online', 'active', 'on'].includes(String(device.status || '').toLowerCase());
         const management = state.role === 'admin' || state.role === 'owner';
-        const controls = '<div class="inline-actions"><button class="mini-btn" type="button" data-device-command="relay1_on" data-device-id="' + device.id + '">Relay 1 on</button><button class="mini-btn" type="button" data-device-command="relay1_off" data-device-id="' + device.id + '">Relay 1 off</button><button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="true" data-device-id="' + device.id + '">Relay 2 on</button><button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="false" data-device-id="' + device.id + '">Relay 2 off</button></div>' +
+        const enrollments = state.fingerprints[device.id] || [];
+        const mine = enrollments.find(function(item) { return Number(item.user_id) === Number(state.profile && state.profile.id); });
+        const fingerprintRows = management ? enrollments.map(function(item) {
+          return '<div class="inline-actions"><span class="meta">Slot ' + item.fingerprint_id + ': ' + escapeHtml(item.name || item.email || ('User ' + item.user_id)) + ': ' + escapeHtml(item.status) + (item.enrollment_pending ? ' (enrollment in progress)' : '') + '</span>' +
+            (item.status !== 'disabled' ? '<button class="mini-btn" type="button" data-fingerprint-action="disable" data-device-id="' + device.id + '" data-fingerprint-id="' + item.fingerprint_id + '">Disable</button><button class="mini-btn" type="button" data-fingerprint-action="delete" data-device-id="' + device.id + '" data-fingerprint-id="' + item.fingerprint_id + '">Delete</button>' : '') + '</div>';
+        }).join('') : '';
+        const controls = '<div class="inline-actions"><button class="mini-btn" type="button" data-device-command="door.unlock" data-device-id="' + device.id + '">Unlock door (5 sec)</button><button class="mini-btn" type="button" data-device-command="door.lock" data-device-id="' + device.id + '">Lock door</button><button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="true" data-device-id="' + device.id + '">Relay 2 on</button><button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="false" data-device-id="' + device.id + '">Relay 2 off</button></div>' +
+          '<div class="device-edit-form"><strong>Fingerprint access</strong><p class="meta">' + (mine ? 'Your fingerprint: slot ' + mine.fingerprint_id + ' (' + escapeHtml(mine.status) + (mine.enrollment_pending ? ', enrollment in progress' : '') + ')' : 'No fingerprint is registered for your account on this device.') + '</p><div class="inline-actions"><button class="mini-btn" type="button" data-fingerprint-enroll data-device-id="' + device.id + '">' + (mine && mine.status === 'active' ? 'Re-enroll my fingerprint' : 'Register my fingerprint') + '</button></div>' + fingerprintRows + '<div class="meta" data-fingerprint-status="' + device.id + '" aria-live="polite"></div></div>' +
           (management
             ? '<form class="device-edit-form" data-device-id="' + device.id + '"><input name="name" aria-label="Device name" value="' + escapeHtml(device.device_name || '') + '" required /><input name="type" aria-label="Device type" value="' + escapeHtml(device.device_type || '') + '" required /><div class="inline-actions"><button class="mini-btn" type="submit">Save</button><button class="mini-btn" type="button" data-delete-device="' + device.id + '">Delete</button></div></form><div class="inline-actions"><span class="tag">' + (device.pairing_configured ? 'ESP32 paired' : 'ESP32 not paired') + '</span><button class="mini-btn" type="button" data-pair-device="' + device.id + '">' + (device.pairing_configured ? 'Regenerate pairing key' : 'Pair ESP32') + '</button></div>'
             : '');
@@ -468,6 +481,126 @@ export default {
         state.activeView = 'devices';
         renderMainPanel();
       }
+      async function openDeviceSocket(deviceId) {
+        const ticketData = await requestJson(API_BASE + '/ws/ticket', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ houseId: Number(selectedHouseId), deviceId: Number(deviceId), clientType: 'web' })
+        });
+        const socket = new WebSocket(API_BASE.replace(/^http/, 'ws') + '/ws/house/' + selectedHouseId + '?ticket=' + encodeURIComponent(ticketData.ticket));
+        await new Promise(function(resolve, reject) {
+          const timeout = window.setTimeout(function() {
+            socket.close();
+            reject(new Error('Could not connect to the device control channel.'));
+          }, 10000);
+          socket.addEventListener('open', function() { window.clearTimeout(timeout); resolve(); }, { once: true });
+          socket.addEventListener('error', function() { window.clearTimeout(timeout); reject(new Error('Could not connect to the device control channel.')); }, { once: true });
+        });
+        return socket;
+      }
+      document.querySelectorAll('[data-fingerprint-enroll]').forEach(function(button) {
+        button.addEventListener('click', async function() {
+          const deviceId = Number(button.dataset.deviceId);
+          const current = (state.fingerprints[deviceId] || []).find(function(item) { return Number(item.user_id) === Number(state.profile && state.profile.id); });
+          if (current && current.status === 'active' && !window.confirm('Re-enroll and replace your current fingerprint on this device?')) return;
+          button.disabled = true;
+          let socket;
+          let reserved = false;
+          const status = document.querySelector('[data-fingerprint-status="' + deviceId + '"]');
+          try {
+            const reservation = await requestJson(API_BASE + '/api/devices/' + deviceId + '/fingerprints/enroll', {
+              method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({})
+            });
+            reserved = true;
+            socket = await openDeviceSocket(deviceId);
+            socket.send(JSON.stringify({ type: 'device_command', targetDeviceId: deviceId, command: 'fingerprint.register', id: reservation.fingerprintId }));
+            if (status) status.textContent = 'Place your finger on the sensor, then remove and scan it again.';
+            await new Promise(function(resolve, reject) {
+              let acknowledged = false;
+              const timeout = window.setTimeout(function() { reject(new Error('Fingerprint enrollment timed out.')); }, 70000);
+              socket.addEventListener('message', function(event) {
+                let message;
+                try { message = JSON.parse(event.data); } catch { return; }
+                if (message.type === 'device_response' && Number(message.deviceId) === deviceId && message.command === 'fingerprint.register') {
+                  if (message.success === false) {
+                    window.clearTimeout(timeout);
+                    reject(new Error(message.message || 'The device rejected fingerprint enrollment.'));
+                  } else acknowledged = true;
+                } else if (message.type === 'fingerprint.event' && Number(message.deviceId) === deviceId &&
+                           Number(message.id) === Number(reservation.fingerprintId) &&
+                           (message.event === 'enrollment_complete' || message.event === 'enrollment_failed')) {
+                  window.clearTimeout(timeout);
+                  if (message.event === 'enrollment_complete' && message.success === true) resolve();
+                  else reject(new Error(message.message || 'Fingerprint enrollment failed.'));
+                } else if (message.type === 'error') {
+                  window.clearTimeout(timeout);
+                  reject(new Error(message.error || 'Fingerprint enrollment failed.'));
+                }
+              });
+              socket.addEventListener('close', function() {
+                if (acknowledged) {
+                  window.clearTimeout(timeout);
+                  reject(new Error('Device disconnected before enrollment completed.'));
+                }
+              }, { once: true });
+            });
+            reserved = false;
+            await refreshDevices();
+            const updatedStatus = document.querySelector('[data-fingerprint-status="' + deviceId + '"]');
+            if (updatedStatus) updatedStatus.textContent = 'Fingerprint registered successfully.';
+          } catch (error) {
+            if (reserved) {
+              try {
+                await requestJson(API_BASE + '/api/devices/' + deviceId + '/fingerprints/enroll', { method: 'DELETE', headers: getAuthHeaders() });
+              } catch (cancelError) {
+                console.error('Could not cancel reserved fingerprint enrollment:', cancelError);
+              }
+            }
+            if (status) status.textContent = error.message || 'Fingerprint enrollment failed.';
+          } finally {
+            if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
+            button.disabled = false;
+          }
+        });
+      });
+      document.querySelectorAll('[data-fingerprint-action]').forEach(function(button) {
+        button.addEventListener('click', async function() {
+          const action = button.dataset.fingerprintAction;
+          const deviceId = Number(button.dataset.deviceId);
+          const fingerprintId = Number(button.dataset.fingerprintId);
+          if (!window.confirm((action === 'disable' ? 'Disable' : 'Delete') + ' this fingerprint? Its sensor template will be removed.')) return;
+          button.disabled = true;
+          let socket;
+          try {
+            socket = await openDeviceSocket(deviceId);
+            socket.send(JSON.stringify({ type: 'device_command', targetDeviceId: deviceId, command: 'fingerprint.delete', id: fingerprintId }));
+            await new Promise(function(resolve, reject) {
+              const timeout = window.setTimeout(function() { reject(new Error('The device did not confirm fingerprint removal.')); }, 10000);
+              socket.addEventListener('message', function(event) {
+                let message;
+                try { message = JSON.parse(event.data); } catch { return; }
+                if (message.type === 'device_response' && Number(message.deviceId) === deviceId && message.command === 'fingerprint.delete') {
+                  window.clearTimeout(timeout);
+                  if (message.success === false) reject(new Error(message.message || 'The device rejected fingerprint removal.'));
+                  else resolve();
+                } else if (message.type === 'error') {
+                  window.clearTimeout(timeout);
+                  reject(new Error(message.error || 'Fingerprint removal failed.'));
+                }
+              });
+            });
+            await requestJson(API_BASE + '/api/devices/' + deviceId + '/fingerprints/' + fingerprintId, {
+              method: 'DELETE', headers: getAuthHeaders(), body: JSON.stringify({ action: action })
+            });
+            await refreshDevices();
+          } catch (error) {
+            showAlert(document.getElementById('deviceNotice') || deviceNotice, error.message || 'Unable to remove fingerprint.', 'error');
+          } finally {
+            if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
+            button.disabled = false;
+          }
+        });
+      });
       const addDeviceForm = document.getElementById('addDeviceForm');
       if (addDeviceForm) addDeviceForm.addEventListener('submit', async function(event) {
         event.preventDefault();
@@ -632,6 +765,7 @@ export default {
     async function loadDashboardData() {
       const headers = getAuthHeaders();
       state.devices = [];
+      state.fingerprints = {};
       state.tenants = [];
       try {
         const housesResponse = await fetch(API_BASE + '/api/houses', { headers: headers });
@@ -649,6 +783,12 @@ export default {
           const devices = Array.isArray(devicesData.devices) ? devicesData.devices : [];
           state.devices = state.devices.concat(devices);
         }
+        await Promise.all(state.devices.map(async function(device) {
+          const response = await fetch(API_BASE + '/api/devices/' + device.id + '/fingerprints', { headers: headers });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Unable to load fingerprints for device ' + device.id);
+          state.fingerprints[device.id] = Array.isArray(data.enrollments) ? data.enrollments : [];
+        }));
         renderStats();
         renderProfile();
         renderViewTabs();
@@ -688,6 +828,7 @@ export default {
       state.houses = [];
       state.tenants = [];
       state.devices = [];
+      state.fingerprints = {};
       state.selectedHouseId = null;
       state.activeView = 'overview';
       document.getElementById('email').value = 'admin@example.com';
@@ -851,6 +992,22 @@ export default {
       if (url.pathname.startsWith('/api/devices/')) {
         const pathParts = url.pathname.split('/').filter(Boolean);
         const id = pathParts[2];
+
+        if (pathParts.length === 4 && pathParts[3] === 'fingerprints' && request.method === 'GET') {
+          return withCors(await listFingerprintEnrollments(env, authUser.user, id), allowOrigin);
+        }
+
+        if (pathParts.length === 5 && pathParts[3] === 'fingerprints' && pathParts[4] === 'enroll' && request.method === 'POST') {
+          return withCors(await startFingerprintEnrollment(env, authUser.user, id), allowOrigin);
+        }
+
+        if (pathParts.length === 5 && pathParts[3] === 'fingerprints' && pathParts[4] === 'enroll' && request.method === 'DELETE') {
+          return withCors(await cancelFingerprintEnrollment(env, authUser.user, id), allowOrigin);
+        }
+
+        if (pathParts.length === 5 && pathParts[3] === 'fingerprints' && request.method === 'DELETE') {
+          return withCors(await removeFingerprintEnrollment(request, env, authUser.user, id, pathParts[4]), allowOrigin);
+        }
 
         if (pathParts.length === 4 && pathParts[3] === 'pairing-key' && request.method === 'POST') {
           return withCors(await rotateDevicePairingKey(request, env, authUser.user, id), allowOrigin);

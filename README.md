@@ -232,6 +232,7 @@ wrangler secret put JWT_SCRT
 - `user_house_access` - Permission mappings
 - `websocket_tickets` - Ticket lifecycle
 - `device_key_hash` - SHA-256 hash for ESP32 pairing keys (migration `0007_device_pairing_keys.sql`)
+- `device_fingerprint_enrollments` - User-to-device fingerprint slots and enrollment state (migration `0008_fingerprint_enrollments.sql`)
 
 ## 🚀 Deployment
 
@@ -280,6 +281,14 @@ See [WEBSOCKET_INTEGRATION_SUMMARY.md](WEBSOCKET_INTEGRATION_SUMMARY.md) for det
 A: Create it from the owner/admin Devices dashboard and follow the one-time
 pairing instructions. Apply migration `0007_device_pairing_keys.sql` before
 deploying the updated Worker. See [08-WEBSOCKET.md](docs/08-WEBSOCKET.md).
+
+**Q: How do I enable dashboard door and fingerprint access?**
+A: Apply migration `0008_fingerprint_enrollments.sql` and deploy the updated
+Worker and dashboard. Users with device access can enroll or replace their own
+fingerprint; owners/admins can disable or delete enrollment records. The door
+unlock command pulses Relay 1 for five seconds, and a fingerprint unlock is
+allowed only for an active enrollment whose user still has access to that
+device. Update and flash the ESP32 firmware before enabling these controls.
 
 **Q: Can I use real IoT devices (ESP32)?**  
 A: Yes! See [09-WEBSOCKET_SETUP.md](docs/09-WEBSOCKET_SETUP.md) for device authentication options.

@@ -160,12 +160,7 @@ export class HouseRoom {
 
         case 'fingerprint.event':
           if (session.clientType === 'device') {
-            this.broadcastToClients({
-              ...message,
-              deviceId: session.deviceId,
-              fromDeviceSessionId: sessionId,
-              timestamp: new Date().toISOString()
-            }, sessionId, 'web');
+            await this.handleFingerprintEvent(sessionId, session, message);
           } else {
             session.ws.send(JSON.stringify({
               type: 'error',
@@ -207,6 +202,129 @@ export class HouseRoom {
         error: 'Failed to process message',
         timestamp: new Date().toISOString()
       }));
+    }
+  }
+
+  async handleFingerprintEvent(sessionId, deviceSession, message) {
+    const fingerprintId = Number(message.id);
+    if (!Number.isInteger(fingerprintId) || fingerprintId < 1 || fingerprintId > 127) {
+      console.error(`[HouseRoom ${this.houseId}] Rejected invalid fingerprint event ID`);
+      return;
+    }
+
+    const forwarded = {
+      ...message,
+      deviceId: deviceSession.deviceId,
+      fromDeviceSessionId: sessionId,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      let eventUserId = null;
+      if (message.event === 'enrollment_complete' && message.success === true) {
+        const enrollment = await this.env.DB.prepare(`
+          SELECT user_id FROM device_fingerprint_enrollments
+          WHERE device_id = ? AND fingerprint_id = ? AND enrollment_pending = 1
+        `).bind(deviceSession.deviceId, fingerprintId).first();
+        eventUserId = enrollment?.user_id ?? null;
+        await this.env.DB.prepare(`
+          UPDATE device_fingerprint_enrollments
+          SET status = 'active', enrollment_pending = 0, updated_at = ?
+          WHERE device_id = ? AND fingerprint_id = ? AND enrollment_pending = 1
+        `).bind(forwarded.timestamp, deviceSession.deviceId, fingerprintId).run();
+      } else if (message.event === 'enrollment_failed') {
+        const enrollment = await this.env.DB.prepare(`
+          SELECT user_id FROM device_fingerprint_enrollments
+          WHERE device_id = ? AND fingerprint_id = ? AND enrollment_pending = 1
+        `).bind(deviceSession.deviceId, fingerprintId).first();
+        eventUserId = enrollment?.user_id ?? null;
+        await this.env.DB.prepare(`
+          DELETE FROM device_fingerprint_enrollments
+          WHERE device_id = ? AND fingerprint_id = ? AND status = 'pending' AND enrollment_pending = 1
+        `).bind(deviceSession.deviceId, fingerprintId).run();
+        await this.env.DB.prepare(`
+          UPDATE device_fingerprint_enrollments
+          SET enrollment_pending = 0, updated_at = ?
+          WHERE device_id = ? AND fingerprint_id = ? AND status = 'active' AND enrollment_pending = 1
+        `).bind(forwarded.timestamp, deviceSession.deviceId, fingerprintId).run();
+      } else if (message.event === 'deleted' && message.success === true) {
+        const enrollment = await this.env.DB.prepare(`
+          SELECT user_id FROM device_fingerprint_enrollments
+          WHERE device_id = ? AND fingerprint_id = ?
+        `).bind(deviceSession.deviceId, fingerprintId).first();
+        eventUserId = enrollment?.user_id ?? null;
+        await this.env.DB.prepare(`
+          UPDATE device_fingerprint_enrollments
+          SET status = 'disabled', enrollment_pending = 0, updated_at = ?
+          WHERE device_id = ? AND fingerprint_id = ?
+        `).bind(forwarded.timestamp, deviceSession.deviceId, fingerprintId).run();
+      } else if (message.event === 'recognized' && message.success === true) {
+        const authorized = await this.env.DB.prepare(`
+          SELECT e.user_id
+          FROM device_fingerprint_enrollments e
+          JOIN users u ON u.id = e.user_id
+          JOIN devices d ON d.id = e.device_id
+          JOIN houses h ON h.id = d.house_id
+          WHERE e.device_id = ? AND e.fingerprint_id = ?
+            AND e.status = 'active' AND e.enrollment_pending = 0
+            AND (
+              u.role = 'admin' OR
+              (u.role = 'owner' AND h.owner_id = u.id) OR
+              EXISTS (
+                SELECT 1 FROM user_device_access a
+                WHERE a.user_id = e.user_id AND a.device_id = e.device_id
+              )
+            )
+        `).bind(deviceSession.deviceId, fingerprintId).first();
+        forwarded.accessGranted = Boolean(authorized);
+        eventUserId = authorized?.user_id ?? null;
+
+        if (authorized) {
+          const unlockCommand = {
+            type: 'device_command',
+            deviceId: deviceSession.deviceId,
+            command: 'door.unlock',
+            params: {},
+            timestamp: new Date().toISOString()
+          };
+          deviceSession.ws.send(JSON.stringify(unlockCommand));
+        }
+      }
+
+      this.sessions.forEach((clientSession, clientSessionId) => {
+        if (
+          clientSessionId === sessionId ||
+          clientSession.clientType !== 'web' ||
+          clientSession.deviceId !== deviceSession.deviceId ||
+          (clientSession.role !== 'admin' && clientSession.role !== 'owner' && clientSession.userId !== eventUserId)
+        ) return;
+        try {
+          clientSession.ws.send(JSON.stringify(forwarded));
+        } catch (error) {
+          console.error(`Failed to send fingerprint event to session ${clientSessionId}:`, error);
+        }
+      });
+    } catch (error) {
+      console.error(`[HouseRoom ${this.houseId}] Failed to process fingerprint event:`, error);
+      if (message.event === 'recognized') return;
+      this.sessions.forEach((clientSession, clientSessionId) => {
+        if (
+          clientSessionId !== sessionId &&
+          clientSession.clientType === 'web' &&
+          clientSession.deviceId === deviceSession.deviceId &&
+          (clientSession.role === 'admin' || clientSession.role === 'owner')
+        ) {
+          try {
+            clientSession.ws.send(JSON.stringify({
+              type: 'error',
+              error: 'Fingerprint event could not be persisted',
+              timestamp: new Date().toISOString()
+            }));
+          } catch (sendError) {
+            console.error(`Failed to report fingerprint persistence error to session ${clientSessionId}:`, sendError);
+          }
+        }
+      });
     }
   }
 

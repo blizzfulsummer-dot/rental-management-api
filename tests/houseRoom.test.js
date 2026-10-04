@@ -79,3 +79,69 @@ test('house room only broadcasts a device response matching the paired device', 
   assert.equal(webSession.messages[0].type, 'device_response');
   assert.equal(webSession.messages[0].deviceId, 7);
 });
+
+test('authorized fingerprint recognition unlocks the paired door and stays device-scoped', async () => {
+  const room = new HouseRoom({ id: 'house-10' }, {
+    DB: {
+      prepare(sql) {
+        assert.match(sql, /device_fingerprint_enrollments/);
+        return {
+          bind(deviceId, fingerprintId) {
+            assert.equal(deviceId, 7);
+            assert.equal(fingerprintId, 12);
+            return { first: async () => ({ user_id: 42 }) };
+          }
+        };
+      }
+    }
+  });
+  const webSession = createSession('tenant', 7);
+  const otherDeviceWeb = createSession('tenant', 8);
+  const otherUserWeb = createSession('tenant', 7);
+  otherUserWeb.userId = 99;
+  const deviceMessages = [];
+  const deviceSession = {
+    clientType: 'device',
+    deviceId: 7,
+    ws: { send(message) { deviceMessages.push(JSON.parse(message)); } }
+  };
+  room.sessions.set('web-session', webSession);
+  room.sessions.set('other-device-web', otherDeviceWeb);
+  room.sessions.set('other-user-web', otherUserWeb);
+  room.sessions.set('device-session', deviceSession);
+
+  await room.handleFingerprintEvent('device-session', deviceSession, {
+    event: 'recognized',
+    success: true,
+    id: 12
+  });
+
+  assert.equal(deviceMessages[0].command, 'door.unlock');
+  assert.equal(webSession.messages[0].accessGranted, true);
+  assert.equal(otherDeviceWeb.messages.length, 0);
+  assert.equal(otherUserWeb.messages.length, 0);
+});
+
+test('unregistered fingerprint recognition never unlocks the door', async () => {
+  const room = new HouseRoom({ id: 'house-10' }, {
+    DB: { prepare() { return { bind() { return { first: async () => null }; } }; } }
+  });
+  const webSession = createSession('owner', 7);
+  const deviceMessages = [];
+  const deviceSession = {
+    clientType: 'device',
+    deviceId: 7,
+    ws: { send(message) { deviceMessages.push(JSON.parse(message)); } }
+  };
+  room.sessions.set('web-session', webSession);
+  room.sessions.set('device-session', deviceSession);
+
+  await room.handleFingerprintEvent('device-session', deviceSession, {
+    event: 'recognized',
+    success: true,
+    id: 12
+  });
+
+  assert.equal(deviceMessages.length, 0);
+  assert.equal(webSession.messages[0].accessGranted, false);
+});

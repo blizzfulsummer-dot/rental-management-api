@@ -535,6 +535,7 @@
       tenants: [],
       selectedHouseId: null,
       devices: [],
+      fingerprints: {},
       ws: null,
       activeView: 'overview'
     };
@@ -755,6 +756,19 @@
       });
 
       const cards = visibleDevices.map(device => `
+        ${(() => {
+          const enrollments = state.fingerprints[device.id] || [];
+          const mine = enrollments.find(item => Number(item.user_id) === Number(state.profile?.id));
+          const fingerprintRows = enrollments.map(item => `
+            <div class="inline-actions">
+              <span class="meta">Slot ${item.fingerprint_id}: ${escapeHtml(item.name || item.email || `User ${item.user_id}`)}: ${escapeHtml(item.status)}${item.enrollment_pending ? ' (enrollment in progress)' : ''}</span>
+              ${canManageDevices && item.status !== 'disabled' ? `
+                <button class="mini-btn" type="button" data-fingerprint-action="disable" data-device-id="${device.id}" data-fingerprint-id="${item.fingerprint_id}">Disable</button>
+                <button class="mini-btn" type="button" data-fingerprint-action="delete" data-device-id="${device.id}" data-fingerprint-id="${item.fingerprint_id}">Delete</button>
+              ` : ''}
+            </div>
+          `).join('');
+          return `
         <div class="device-card">
           <h3>${escapeHtml(device.device_name || `Device ${device.id}`)}</h3>
           <div class="meta">Type: ${escapeHtml(device.device_type || 'Unknown')}<br />House: ${escapeHtml(selectedHouse.name || `House ${selectedHouse.id}`)}</div>
@@ -762,10 +776,19 @@
             ${escapeHtml(device.status || 'offline')}
           </span>
           <div class="inline-actions">
-            <button class="mini-btn" type="button" data-device-command="relay1_on" data-device-id="${device.id}">Relay 1 on</button>
-            <button class="mini-btn" type="button" data-device-command="relay1_off" data-device-id="${device.id}">Relay 1 off</button>
+            <button class="mini-btn" type="button" data-device-command="door.unlock" data-device-id="${device.id}">Unlock door (5 sec)</button>
+            <button class="mini-btn" type="button" data-device-command="door.lock" data-device-id="${device.id}">Lock door</button>
             <button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="true" data-device-id="${device.id}">Relay 2 on</button>
             <button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="false" data-device-id="${device.id}">Relay 2 off</button>
+          </div>
+          <div class="device-edit-form">
+            <strong>Fingerprint access</strong>
+            <p class="meta">${mine ? `Your fingerprint: slot ${mine.fingerprint_id} (${escapeHtml(mine.status)}${mine.enrollment_pending ? ', enrollment in progress' : ''})` : 'No fingerprint is registered for your account on this device.'}</p>
+            <div class="inline-actions">
+              <button class="mini-btn" type="button" data-fingerprint-enroll data-device-id="${device.id}">${mine?.status === 'active' ? 'Re-enroll my fingerprint' : 'Register my fingerprint'}</button>
+            </div>
+            ${canManageDevices ? fingerprintRows : ''}
+            <div class="meta" data-fingerprint-status="${device.id}" aria-live="polite"></div>
           </div>
           ${canManageDevices ? `
             <form class="device-edit-form" data-device-id="${device.id}">
@@ -782,6 +805,8 @@
             </div>
           ` : ''}
         </div>
+          `;
+        })()}
       `).join('');
 
       const houseOptions = state.houses.map(house => `
@@ -850,6 +875,159 @@
         state.activeView = 'devices';
         renderMainPanel();
       };
+
+      async function openDeviceSocket(deviceId) {
+        const ticketData = await requestJson(`${API_BASE}/ws/ticket`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            houseId: Number(selectedHouseId),
+            deviceId: Number(deviceId),
+            clientType: 'web'
+          })
+        });
+        const socket = new WebSocket(`${WS_BASE}/ws/house/${selectedHouseId}?ticket=${encodeURIComponent(ticketData.ticket)}`);
+        await new Promise((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            socket.close();
+            reject(new Error('Could not connect to the device control channel.'));
+          }, 10000);
+          socket.addEventListener('open', () => {
+            window.clearTimeout(timeout);
+            resolve();
+          }, { once: true });
+          socket.addEventListener('error', () => {
+            window.clearTimeout(timeout);
+            reject(new Error('Could not connect to the device control channel.'));
+          }, { once: true });
+        });
+        return socket;
+      }
+
+      function sendPersistentDeviceCommand(socket, deviceId, command, fields = {}) {
+        socket.send(JSON.stringify({
+          type: 'device_command',
+          targetDeviceId: Number(deviceId),
+          command,
+          ...fields
+        }));
+      }
+
+      document.querySelectorAll('[data-fingerprint-enroll]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const deviceId = Number(button.dataset.deviceId);
+          const current = (state.fingerprints[deviceId] || []).find(item => Number(item.user_id) === Number(state.profile?.id));
+          if (current?.status === 'active' && !window.confirm('Re-enroll and replace your current fingerprint on this device?')) return;
+          button.disabled = true;
+          let socket;
+          let enrollmentReserved = false;
+          const status = document.querySelector(`[data-fingerprint-status="${deviceId}"]`);
+          try {
+            const reservation = await requestJson(`${API_BASE}/api/devices/${deviceId}/fingerprints/enroll`, {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({})
+            });
+            enrollmentReserved = true;
+            socket = await openDeviceSocket(deviceId);
+            sendPersistentDeviceCommand(socket, deviceId, 'fingerprint.register', { id: reservation.fingerprintId });
+            if (status) status.textContent = `Place your finger on the sensor for slot ${reservation.fingerprintId}. Follow the sensor prompts.`;
+
+            const outcome = await new Promise((resolve, reject) => {
+              let acknowledged = false;
+              const timeout = window.setTimeout(() => reject(new Error('Fingerprint enrollment timed out. You can try again.')), 70000);
+              socket.addEventListener('message', event => {
+                let message;
+                try { message = JSON.parse(event.data); } catch { return; }
+                if (message.type === 'device_response' && Number(message.deviceId) === deviceId && message.command === 'fingerprint.register') {
+                  if (message.success === false) {
+                    window.clearTimeout(timeout);
+                    reject(new Error(message.message || 'The device rejected fingerprint enrollment.'));
+                  } else {
+                    acknowledged = true;
+                  }
+                } else if (message.type === 'fingerprint.event' && Number(message.deviceId) === deviceId &&
+                           Number(message.id) === Number(reservation.fingerprintId) &&
+                           ['enrollment_complete', 'enrollment_failed'].includes(message.event)) {
+                  window.clearTimeout(timeout);
+                  resolve({ success: message.event === 'enrollment_complete' && message.success === true, message: message.message });
+                } else if (message.type === 'error') {
+                  window.clearTimeout(timeout);
+                  reject(new Error(message.error || 'Fingerprint enrollment failed.'));
+                }
+              });
+              socket.addEventListener('close', () => {
+                if (acknowledged) {
+                  window.clearTimeout(timeout);
+                  reject(new Error('Device disconnected before enrollment completed.'));
+                }
+              }, { once: true });
+            });
+
+            if (!outcome.success) throw new Error(outcome.message || 'Fingerprint enrollment failed.');
+            enrollmentReserved = false;
+            await refreshDevices();
+            const updatedStatus = document.querySelector(`[data-fingerprint-status="${deviceId}"]`);
+            if (updatedStatus) updatedStatus.textContent = 'Fingerprint registered successfully.';
+          } catch (error) {
+            if (enrollmentReserved) {
+              try {
+                await requestJson(`${API_BASE}/api/devices/${deviceId}/fingerprints/enroll`, {
+                  method: 'DELETE',
+                  headers: getAuthHeaders()
+                });
+              } catch (cancelError) {
+                console.error('Could not cancel reserved fingerprint enrollment:', cancelError);
+              }
+            }
+            if (status) status.textContent = error.message || 'Fingerprint enrollment failed.';
+          } finally {
+            if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
+            button.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-fingerprint-action]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const action = button.dataset.fingerprintAction;
+          const deviceId = Number(button.dataset.deviceId);
+          const fingerprintId = Number(button.dataset.fingerprintId);
+          if (!window.confirm(`${action === 'disable' ? 'Disable' : 'Delete'} this fingerprint? The template will be removed from the sensor.`)) return;
+          button.disabled = true;
+          let socket;
+          try {
+            socket = await openDeviceSocket(deviceId);
+            sendPersistentDeviceCommand(socket, deviceId, 'fingerprint.delete', { id: fingerprintId });
+            await new Promise((resolve, reject) => {
+              const timeout = window.setTimeout(() => reject(new Error('The device did not confirm fingerprint removal.')), 10000);
+              socket.addEventListener('message', event => {
+                let message;
+                try { message = JSON.parse(event.data); } catch { return; }
+                if (message.type === 'device_response' && Number(message.deviceId) === deviceId && message.command === 'fingerprint.delete') {
+                  window.clearTimeout(timeout);
+                  if (message.success === false) reject(new Error(message.message || 'The device rejected fingerprint removal.'));
+                  else resolve();
+                } else if (message.type === 'error') {
+                  window.clearTimeout(timeout);
+                  reject(new Error(message.error || 'Fingerprint removal failed.'));
+                }
+              });
+            });
+            await requestJson(`${API_BASE}/api/devices/${deviceId}/fingerprints/${fingerprintId}`, {
+              method: 'DELETE',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ action })
+            });
+            await refreshDevices();
+          } catch (error) {
+            showAlert(document.getElementById('deviceNotice') || deviceNotice, error.message || 'Unable to remove fingerprint.', 'error');
+          } finally {
+            if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
+            button.disabled = false;
+          }
+        });
+      });
 
       document.getElementById('addDeviceForm')?.addEventListener('submit', async event => {
         event.preventDefault();
@@ -1064,6 +1242,7 @@
     async function loadDashboardData() {
       const headers = getAuthHeaders();
       state.devices = [];
+      state.fingerprints = {};
       state.tenants = [];
 
       try {
@@ -1089,6 +1268,12 @@
             const devices = Array.isArray(devicesData.devices) ? devicesData.devices : [];
             state.devices = [...state.devices, ...devices];
           }
+          await Promise.all(state.devices.map(async device => {
+            const response = await fetch(`${API_BASE}/api/devices/${device.id}/fingerprints`, { headers });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `Unable to load fingerprints for device ${device.id}`);
+            state.fingerprints[device.id] = Array.isArray(data.enrollments) ? data.enrollments : [];
+          }));
         }
 
         renderStats();
@@ -1155,6 +1340,7 @@
       state.houses = [];
       state.tenants = [];
       state.devices = [];
+      state.fingerprints = {};
       state.selectedHouseId = null;
       state.activeView = 'overview';
       document.getElementById('email').value = 'admin@example.com';
