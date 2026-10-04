@@ -132,7 +132,16 @@ export async function issueWebSocketTicket(request, env) {
         .prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?')
         .bind(houseId, userId)
         .first();
-      if (!ownedHouse) return json({ error: 'Access denied to this house' }, 403);
+      if (!ownedHouse) {
+        if (clientType !== 'web') {
+          return json({ error: 'Only admins may connect devices' }, 403);
+        }
+        const deviceAccess = await env.DB
+          .prepare('SELECT 1 FROM user_device_access WHERE user_id = ? AND device_id = ?')
+          .bind(userId, targetDeviceId)
+          .first();
+        if (!deviceAccess) return json({ error: 'Access denied to this device' }, 403);
+      }
     } else {
       if (clientType !== 'web') {
         return json({ error: 'Only admins may connect devices' }, 403);

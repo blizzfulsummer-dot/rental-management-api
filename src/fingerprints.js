@@ -11,7 +11,7 @@ async function getDevice(env, deviceId) {
 
 async function canAccessDevice(env, authUser, device) {
   if (authUser.role === 'admin') return true;
-  if (authUser.role === 'owner') return device.owner_id === authUser.id;
+  if (authUser.role === 'owner' && Number(device.owner_id) === Number(authUser.id)) return true;
   const access = await env.DB
     .prepare('SELECT 1 FROM user_device_access WHERE user_id = ? AND device_id = ?')
     .bind(authUser.id, device.id)
@@ -35,7 +35,8 @@ export async function listFingerprintEnrollments(env, authUser, deviceId) {
     if (!device) return json({ error: 'Device not found' }, 404);
     if (!(await canAccessDevice(env, authUser, device))) return json({ error: 'Forbidden' }, 403);
 
-    const isManager = authUser.role === 'admin' || authUser.role === 'owner';
+    const isManager = authUser.role === 'admin'
+      || (authUser.role === 'owner' && Number(device.owner_id) === Number(authUser.id));
     const rows = await env.DB.prepare(`
       SELECT e.fingerprint_id, e.user_id, u.name, u.email, e.status,
              e.enrollment_pending, e.created_at, e.updated_at
@@ -159,6 +160,9 @@ export async function removeFingerprintEnrollment(request, env, authUser, device
   try {
     const device = await getDevice(env, deviceValidation.value);
     if (!device) return json({ error: 'Device not found' }, 404);
+    if (authUser.role === 'owner' && Number(device.owner_id) !== Number(authUser.id)) {
+      return json({ error: 'Forbidden' }, 403);
+    }
     if (!(await canAccessDevice(env, authUser, device))) return json({ error: 'Forbidden' }, 403);
 
     const enrollment = await env.DB.prepare(`

@@ -284,6 +284,66 @@ test('device access also makes the associated house visible to the user', async 
   assert.equal(payload.houses[0].location, 'Street 3');
 });
 
+test('owner can see houses explicitly granted through user_house_access', async () => {
+  let boundUserIds;
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          boundUserIds = args;
+          return {
+            async all() {
+              assert.match(sql, /uha\.user_id = \?/);
+              return {
+                results: [
+                  { id: 8, name: 'Shared House', address: 'Street 8', owner_id: 7, created_at: '2026-01-01' }
+                ]
+              };
+            }
+          };
+        }
+      };
+    }
+  };
+
+  const response = await listHouses({}, { DB: db }, { id: 42, role: 'owner' });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(boundUserIds, [42, 42, 42]);
+  assert.equal(payload.houses[0].id, 8);
+  assert.equal(payload.houses[0].location, 'Street 8');
+});
+
+test('owner can list only explicitly assigned devices in a shared house', async () => {
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          return {
+            async first() {
+              if (sql.includes('FROM houses WHERE id = ? AND owner_id = ?')) return null;
+              assert.match(sql, /user_house_access/);
+              return { 1: 1 };
+            },
+            async all() {
+              assert.match(sql, /JOIN user_device_access uda/);
+              assert.deepEqual(args, [8, 42]);
+              return { results: [{ id: 12, house_id: 8, name: 'Entry Device', type: 'lock' }] };
+            }
+          };
+        }
+      };
+    }
+  };
+
+  const response = await listHouseDevices({}, { DB: db }, { id: 42, role: 'owner' }, '8');
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.devices[0].id, 12);
+});
+
 test('profile endpoint includes assigned houses using production address column', async () => {
   const db = {
     prepare(sql) {

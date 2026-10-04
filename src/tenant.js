@@ -418,12 +418,23 @@ export async function listHouses(request, env, authUser) {
     if (authUser.role === 'owner') {
       const rows = await env.DB
         .prepare(`
-          SELECT h.*
+          SELECT DISTINCT h.*
           FROM houses h
           WHERE h.owner_id = ?
+             OR EXISTS (
+               SELECT 1
+               FROM user_house_access uha
+               WHERE uha.house_id = h.id AND uha.user_id = ?
+             )
+             OR EXISTS (
+               SELECT 1
+               FROM devices d
+               JOIN user_device_access uda ON uda.device_id = d.id
+               WHERE d.house_id = h.id AND uda.user_id = ?
+             )
           ORDER BY h.created_at DESC
         `)
-        .bind(authUser.id)
+        .bind(authUser.id, authUser.id, authUser.id)
         .all();
       return json({ houses: (rows.results || []).map(normalizeHouse) });
     }
@@ -574,11 +585,9 @@ export async function listHouseDevices(request, env, authUser, houseId) {
   try {
     let deviceAccessOnly = false;
     if (authUser.role !== 'admin') {
-      if (authUser.role === 'owner') {
-        if (!(await isHouseOwnedByUser(env, authUser.id, idValidation.value))) {
-          return json({ error: 'Forbidden' }, 403);
-        }
-      } else {
+      const ownsHouse = authUser.role === 'owner'
+        && await isHouseOwnedByUser(env, authUser.id, idValidation.value);
+      if (!ownsHouse) {
         const houseAccess = await env.DB
           .prepare(`
             SELECT 1
