@@ -332,7 +332,22 @@ export default {
   </div>
 
   <script>
-    const API_BASE = window.location.origin || 'http://localhost:8787';
+    function resolveApiBase() {
+      const host = window.location.hostname;
+      const origin = window.location.origin;
+
+      if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || origin.includes('8787')) {
+        return origin || 'http://127.0.0.1:8787';
+      }
+
+      if (host === 'rental-management.ehexibit.com') {
+        return 'https://api.ehexibit.com';
+      }
+
+      return origin || 'http://127.0.0.1:8787';
+    }
+
+    const API_BASE = resolveApiBase();
     const state = { jwt: '', profile: null, role: null, houses: [], tenants: [], devices: [], selectedHouseId: null, activeView: 'overview' };
     const loginScreen = document.getElementById('loginScreen');
     const dashboardScreen = document.getElementById('dashboardScreen');
