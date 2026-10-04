@@ -498,6 +498,40 @@ export default {
         });
         return socket;
       }
+      function sendPersistentDeviceCommand(socket, deviceId, command, fields) {
+        socket.send(JSON.stringify({
+          type: 'device_command',
+          targetDeviceId: Number(deviceId),
+          command: command,
+          ...(fields || {})
+        }));
+      }
+      function waitForDeviceResponse(socket, deviceId, command) {
+        return new Promise(function(resolve, reject) {
+          const timeout = window.setTimeout(function() { finish(new Error('The device did not respond to the fingerprint sensor check.')); }, 10000);
+          function finish(error) {
+            window.clearTimeout(timeout);
+            socket.removeEventListener('message', onMessage);
+            socket.removeEventListener('close', onClose);
+            if (error) reject(error);
+          }
+          function onClose() { finish(new Error('Device disconnected before responding.')); }
+          function onMessage(event) {
+            let message;
+            try { message = JSON.parse(event.data); } catch { return; }
+            if (message.type === 'device_response' && Number(message.deviceId) === Number(deviceId) && message.command === command) {
+              finish();
+              if (message.success === false) reject(new Error(message.message || 'Fingerprint sensor is not available.'));
+              else resolve(message);
+            } else if (message.type === 'error') {
+              finish(new Error(message.error || 'Fingerprint sensor check failed.'));
+            }
+          }
+          socket.addEventListener('message', onMessage);
+          socket.addEventListener('close', onClose, { once: true });
+          sendPersistentDeviceCommand(socket, deviceId, command);
+        });
+      }
       document.querySelectorAll('[data-fingerprint-enroll]').forEach(function(button) {
         button.addEventListener('click', async function() {
           const deviceId = Number(button.dataset.deviceId);
@@ -508,41 +542,44 @@ export default {
           let reserved = false;
           const status = document.querySelector('[data-fingerprint-status="' + deviceId + '"]');
           try {
+            socket = await openDeviceSocket(deviceId);
+            const sensorStatus = await waitForDeviceResponse(socket, deviceId, 'fingerprint.status');
+            if (!/sensor connected/i.test(sensorStatus.message || '')) {
+              throw new Error('Fingerprint sensor is not connected to the device.');
+            }
             const reservation = await requestJson(API_BASE + '/api/devices/' + deviceId + '/fingerprints/enroll', {
               method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({})
             });
             reserved = true;
-            socket = await openDeviceSocket(deviceId);
-            socket.send(JSON.stringify({ type: 'device_command', targetDeviceId: deviceId, command: 'fingerprint.register', id: reservation.fingerprintId }));
-            if (status) status.textContent = 'Place your finger on the sensor, then remove and scan it again.';
             await new Promise(function(resolve, reject) {
-              let acknowledged = false;
-              const timeout = window.setTimeout(function() { reject(new Error('Fingerprint enrollment timed out.')); }, 70000);
-              socket.addEventListener('message', function(event) {
+              const timeout = window.setTimeout(function() { finish(new Error('Fingerprint enrollment timed out.')); }, 70000);
+              function finish(error) {
+                window.clearTimeout(timeout);
+                socket.removeEventListener('message', onMessage);
+                socket.removeEventListener('close', onClose);
+                if (error) reject(error);
+              }
+              function onClose() { finish(new Error('Device disconnected before enrollment completed.')); }
+              function onMessage(event) {
                 let message;
                 try { message = JSON.parse(event.data); } catch { return; }
                 if (message.type === 'device_response' && Number(message.deviceId) === deviceId && message.command === 'fingerprint.register') {
                   if (message.success === false) {
-                    window.clearTimeout(timeout);
-                    reject(new Error(message.message || 'The device rejected fingerprint enrollment.'));
-                  } else acknowledged = true;
+                    finish(new Error(message.message || 'The device rejected fingerprint enrollment.'));
+                  } else if (status) status.textContent = 'Place your finger on the sensor, then remove and scan it again.';
                 } else if (message.type === 'fingerprint.event' && Number(message.deviceId) === deviceId &&
                            Number(message.id) === Number(reservation.fingerprintId) &&
                            (message.event === 'enrollment_complete' || message.event === 'enrollment_failed')) {
-                  window.clearTimeout(timeout);
+                  finish();
                   if (message.event === 'enrollment_complete' && message.success === true) resolve();
                   else reject(new Error(message.message || 'Fingerprint enrollment failed.'));
                 } else if (message.type === 'error') {
-                  window.clearTimeout(timeout);
-                  reject(new Error(message.error || 'Fingerprint enrollment failed.'));
+                  finish(new Error(message.error || 'Fingerprint enrollment failed.'));
                 }
-              });
-              socket.addEventListener('close', function() {
-                if (acknowledged) {
-                  window.clearTimeout(timeout);
-                  reject(new Error('Device disconnected before enrollment completed.'));
-                }
-              }, { once: true });
+              }
+              socket.addEventListener('message', onMessage);
+              socket.addEventListener('close', onClose, { once: true });
+              sendPersistentDeviceCommand(socket, deviceId, 'fingerprint.register', { id: reservation.fingerprintId });
             });
             reserved = false;
             await refreshDevices();
