@@ -54,6 +54,17 @@ test('house room routes a command to the ticketed device session', () => {
   assert.equal(sender.messages[0].type, 'command_routed');
 });
 
+test('house room echoes a device heartbeat request ID in its pong', () => {
+  const room = new HouseRoom({ id: 'house-10' }, {});
+  const device = createSession('device', 7);
+  room.sessions.set('device-session', device);
+
+  room.handlePing('device-session', device, { requestId: 123 });
+
+  assert.equal(device.messages[0].type, 'pong');
+  assert.equal(device.messages[0].requestId, 123);
+});
+
 test('house room only broadcasts a device response matching the paired device', () => {
   const room = new HouseRoom({ id: 'house-10' }, {});
   const webSession = createSession('tenant', 7);
