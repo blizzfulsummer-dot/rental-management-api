@@ -14,7 +14,7 @@ export class HouseRoom {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    this.houseId = state.id;
+    this.houseId = Number(String(state.id).match(/house-(\d+)/)?.[1]) || null;
     this.sessions = new Map(); // sessionId → {ws, userId, clientType, deviceId, role, connectedAt}
   }
 
@@ -30,6 +30,7 @@ export class HouseRoom {
 
     // Extract session metadata from URL parameters or Durable Object state
     const url = new URL(request.url);
+    this.houseId = Number(url.searchParams.get('houseId')) || this.houseId;
     const sessionId = url.searchParams.get('sessionId');
     const userId = url.searchParams.get('userId');
     const clientType = url.searchParams.get('clientType') || 'web';
@@ -145,6 +146,35 @@ export class HouseRoom {
           }
           break;
 
+        case 'device_response':
+          if (session.clientType === 'device') {
+            this.handleDeviceResponse(sessionId, session, message);
+          } else {
+            session.ws.send(JSON.stringify({
+              type: 'error',
+              error: 'Only devices can send device responses',
+              timestamp: new Date().toISOString()
+            }));
+          }
+          break;
+
+        case 'fingerprint.event':
+          if (session.clientType === 'device') {
+            this.broadcastToClients({
+              ...message,
+              deviceId: session.deviceId,
+              fromDeviceSessionId: sessionId,
+              timestamp: new Date().toISOString()
+            }, sessionId, 'web');
+          } else {
+            session.ws.send(JSON.stringify({
+              type: 'error',
+              error: 'Only devices can send fingerprint events',
+              timestamp: new Date().toISOString()
+            }));
+          }
+          break;
+
         case 'get_devices':
           // Request list of connected devices
           this.handleGetDevices(sessionId, session);
@@ -235,6 +265,8 @@ export class HouseRoom {
       type: 'device_command',
       deviceId: targetDeviceId,
       command,
+      id: message.id,
+      state: message.state,
       params: params || {},
       fromUserId: session.userId,
       fromSessionId: sessionId,
@@ -265,10 +297,18 @@ export class HouseRoom {
   handleDeviceUpdate(sessionId, session, message) {
     const { deviceId, status, data } = message;
 
-    if (!deviceId) {
+    if (Number(deviceId) !== session.deviceId) {
       session.ws.send(JSON.stringify({
         type: 'error',
-        error: 'device_update requires deviceId',
+        error: 'Device update does not match the connected device',
+        timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+    if (status !== undefined && !['online', 'offline'].includes(status)) {
+      session.ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Device status must be online or offline',
         timestamp: new Date().toISOString()
       }));
       return;
@@ -277,14 +317,38 @@ export class HouseRoom {
     // Broadcast device update to all web clients
     const updateMessage = {
       type: 'device_update',
-      deviceId,
+      deviceId: session.deviceId,
       status: status || 'online',
       data: data || {},
       fromDeviceSessionId: sessionId,
       timestamp: new Date().toISOString()
     };
 
+    this.env.DB.prepare('UPDATE devices SET status = ? WHERE id = ? AND house_id = ?')
+      .bind(updateMessage.status, session.deviceId, this.houseId)
+      .run()
+      .catch(error => console.error(`[HouseRoom ${this.houseId}] Failed to persist device status:`, error));
+
     this.broadcastToClients(updateMessage, sessionId, 'web');
+  }
+
+  handleDeviceResponse(sessionId, session, message) {
+    if (Number(message.deviceId) !== session.deviceId) {
+      session.ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Device response does not match the connected device',
+        timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+
+    this.broadcastToClients({
+      ...message,
+      type: 'device_response',
+      deviceId: session.deviceId,
+      fromDeviceSessionId: sessionId,
+      timestamp: new Date().toISOString()
+    }, sessionId, 'web');
   }
 
   /**
@@ -336,6 +400,17 @@ export class HouseRoom {
     if (!session) return;
 
     this.sessions.delete(sessionId);
+
+    if (session.clientType === 'device' && session.deviceId) {
+      const stillConnected = Array.from(this.sessions.values())
+        .some(current => current.clientType === 'device' && current.deviceId === session.deviceId);
+      if (!stillConnected) {
+        this.env.DB.prepare('UPDATE devices SET status = ? WHERE id = ? AND house_id = ?')
+          .bind('offline', session.deviceId, this.houseId)
+          .run()
+          .catch(error => console.error(`[HouseRoom ${this.houseId}] Failed to persist disconnect status:`, error));
+      }
+    }
 
     // Notify other clients
     this.broadcastSystemMessage({

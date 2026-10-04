@@ -105,6 +105,29 @@ target devices in their own houses, and tenants/users need a matching
 `user_device_access` row. A ticket is restricted to its one device and cannot
 be used to command another device in the same house.
 
+### POST /ws/device-ticket
+
+ESP32 devices exchange their one-time dashboard pairing key for a short-lived
+ticket. This endpoint does not accept a user JWT.
+
+**Request:**
+```http
+POST /ws/device-ticket
+Authorization: Bearer <64-character-pairing-key>
+Content-Type: application/json
+```
+
+```json
+{ "deviceId": 123 }
+```
+
+The Worker hashes the supplied key and matches it to that device's
+`device_key_hash`. A successful response contains a 60-second, single-use
+ticket and the device's house ID. The device connects to
+`/ws/house/:houseId?ticket=...`; reconnects must obtain a new ticket. Never
+send pairing keys over plain HTTP. Admins and owners see a newly generated key
+only once when creating a device or rotating its key.
+
 **Response (200 OK):**
 ```json
 {

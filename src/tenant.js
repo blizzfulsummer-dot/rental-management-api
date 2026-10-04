@@ -53,11 +53,26 @@ function getDeviceColumn(columns, currentName, legacyName) {
 }
 
 function normalizeDevice(device) {
+  const { device_key_hash, ...visibleDevice } = device;
   return {
-    ...device,
-    device_name: device.device_name ?? device.name ?? `Device ${device.id}`,
-    device_type: device.device_type ?? device.type ?? null
+    ...visibleDevice,
+    device_name: visibleDevice.device_name ?? visibleDevice.name ?? `Device ${visibleDevice.id}`,
+    device_type: visibleDevice.device_type ?? visibleDevice.type ?? null,
+    pairing_configured: Boolean(device_key_hash)
   };
+}
+
+function generateDeviceKey() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function hashDeviceKey(key) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export async function createTenant(request, env, authUser) {
@@ -633,9 +648,15 @@ export async function createDevice(request, env, authUser) {
     if (!nameColumn || !typeColumn || !columns.has('house_id')) {
       throw new Error('The device table is missing required house, name, or type columns');
     }
+    if (!columns.has('device_key_hash')) {
+      throw new Error('Apply migration 0007 before creating paired devices');
+    }
 
     const insertColumns = ['house_id', nameColumn, typeColumn];
     const values = [idValidation.value, deviceName, deviceType];
+    const pairingKey = generateDeviceKey();
+    insertColumns.push('device_key_hash');
+    values.push(await hashDeviceKey(pairingKey));
     if (columns.has('status')) {
       insertColumns.push('status');
       values.push(typeof parsed.data?.status === 'string' ? parsed.data.status : 'offline');
@@ -655,10 +676,47 @@ export async function createDevice(request, env, authUser) {
       .bind(result.meta?.last_row_id)
       .first();
 
-    return json({ success: true, device: device ? normalizeDevice(device) : null }, 201);
+    return json({
+      success: true,
+      device: device ? normalizeDevice(device) : null,
+      pairing_key: pairingKey
+    }, 201);
   } catch (error) {
     console.error('Create device error:', error);
     return json({ error: 'Failed to create device' }, 500);
+  }
+}
+
+export async function rotateDevicePairingKey(request, env, authUser, deviceId) {
+  const idValidation = validateId(deviceId);
+  if (!idValidation.ok) return json({ error: 'Invalid device ID' }, 400);
+
+  try {
+    const device = await env.DB
+      .prepare('SELECT * FROM devices WHERE id = ?')
+      .bind(idValidation.value)
+      .first();
+    if (!device) return json({ error: 'Device not found' }, 404);
+
+    if (!(await canManageHouse(env, authUser, device.house_id))) {
+      return json({ error: 'Forbidden' }, 403);
+    }
+
+    const columns = await getDeviceColumns(env);
+    if (!columns.has('device_key_hash')) {
+      throw new Error('Apply migration 0007 before pairing devices');
+    }
+
+    const pairingKey = generateDeviceKey();
+    await env.DB
+      .prepare('UPDATE devices SET device_key_hash = ? WHERE id = ?')
+      .bind(await hashDeviceKey(pairingKey), idValidation.value)
+      .run();
+
+    return json({ success: true, pairing_key: pairingKey });
+  } catch (error) {
+    console.error('Rotate device pairing key error:', error);
+    return json({ error: 'Failed to rotate device pairing key' }, 500);
   }
 }
 

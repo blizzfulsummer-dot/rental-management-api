@@ -17,6 +17,7 @@ A complete Cloudflare Workers API for rental property management with real-time 
 - ✅ **WebSocket Room System** - Per-house Durable Objects for real-time communication
 - ✅ **Secure Tickets** - Short-lived, single-use tokens for WebSocket access
 - ✅ **Device Commands** - Web clients send commands to IoT devices
+- ✅ **ESP32 Pairing** - One-time device keys are hashed in D1 and exchanged for device-bound tickets
 - ✅ **Status Updates** - Devices broadcast real-time status to web clients
 - ✅ **Session Management** - Track authenticated users and devices
 - ✅ **Admin Monitoring** - See all active sessions in a house room
@@ -225,11 +226,12 @@ wrangler secret put JWT_SCRT
 - `refresh_tokens` - Session tokens
 - `password_resets` - Reset token storage
 
-### Smart Home Tables (NEW!)
+### Smart Home Tables
 - `houses` - Property/house records
 - `devices` - IoT device registry
 - `user_house_access` - Permission mappings
 - `websocket_tickets` - Ticket lifecycle
+- `device_key_hash` - SHA-256 hash for ESP32 pairing keys (migration `0007_device_pairing_keys.sql`)
 
 ## 🚀 Deployment
 
@@ -274,8 +276,10 @@ See [WEBSOCKET_INTEGRATION_SUMMARY.md](WEBSOCKET_INTEGRATION_SUMMARY.md) for det
 
 ### Common Questions
 
-**Q: How do I add more devices?**  
-A: Insert into the `devices` table. See [04-DATABASE.md](docs/04-DATABASE.md).
+**Q: How do I add and pair an ESP32 device?**
+A: Create it from the owner/admin Devices dashboard and follow the one-time
+pairing instructions. Apply migration `0007_device_pairing_keys.sql` before
+deploying the updated Worker. See [08-WEBSOCKET.md](docs/08-WEBSOCKET.md).
 
 **Q: Can I use real IoT devices (ESP32)?**  
 A: Yes! See [09-WEBSOCKET_SETUP.md](docs/09-WEBSOCKET_SETUP.md) for device authentication options.
@@ -316,4 +320,3 @@ Property of rental management system
 ---
 
 **Ready to manage your rental properties with real-time smart home control!** 🏠✨
-

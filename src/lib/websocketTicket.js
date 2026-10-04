@@ -177,6 +177,73 @@ export async function issueWebSocketTicket(request, env) {
   }
 }
 
+export async function issueDeviceWebSocketTicket(request, env) {
+  if (request.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, 405);
+  }
+  if (new URL(request.url).protocol !== 'https:') {
+    return json({ error: 'HTTPS is required for device pairing' }, 426);
+  }
+
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return json({ error: 'Device pairing key required' }, 401);
+  }
+  const pairingKey = authHeader.slice(7).trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/i.test(pairingKey)) {
+    return json({ error: 'Invalid device pairing key' }, 401);
+  }
+
+  const body = await parseJsonBody(request);
+  if (!body.ok) return json({ error: body.error }, 400);
+  const deviceId = Number(body.data?.deviceId);
+  if (!Number.isSafeInteger(deviceId) || deviceId <= 0) {
+    return json({ error: 'A valid deviceId is required' }, 400);
+  }
+
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pairingKey));
+    const keyHash = Array.from(new Uint8Array(digest))
+      .map(byte => byte.toString(16).padStart(2, '0'))
+      .join('');
+    const device = await env.DB
+      .prepare(`
+        SELECT d.id, d.house_id, h.owner_id
+        FROM devices d
+        JOIN houses h ON h.id = d.house_id
+        WHERE d.id = ? AND d.device_key_hash = ?
+      `)
+      .bind(deviceId, keyHash)
+      .first();
+
+    if (!device) return json({ error: 'Invalid device ID or pairing key' }, 401);
+
+    const ticket = generateUUID();
+    const sessionId = generateUUID();
+    const expiresInSeconds = 60;
+    const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
+    await env.DB
+      .prepare(`
+        INSERT INTO websocket_tickets
+          (ticket_id, user_id, house_id, client_type, device_id, expires_at, created_at)
+        VALUES (?, ?, ?, 'device', ?, ?, ?)
+      `)
+      .bind(ticket, device.owner_id, device.house_id, device.id, expiresAt, new Date().toISOString())
+      .run();
+
+    return json({
+      ticket,
+      sessionId,
+      expiresIn: expiresInSeconds,
+      deviceId: device.id,
+      houseId: device.house_id
+    });
+  } catch (error) {
+    console.error('Issue device WebSocket ticket error:', error);
+    return json({ error: 'Failed to issue device ticket' }, 500);
+  }
+}
+
 /**
  * Validate WebSocket ticket and return session metadata
  * Called by WebSocket handler before routing to Durable Object

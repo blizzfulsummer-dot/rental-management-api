@@ -2,6 +2,13 @@
 
 Step-by-step guide to integrate the WebSocket room system into your rental management project.
 
+> **For this repository:** the role-aware device inventory, pairing-key flow,
+> ticket endpoint, and ESP32 protocol are already implemented. Do not use the
+> placeholder schema/customization steps below for the deployed app. See
+> [08-WEBSOCKET.md](./08-WEBSOCKET.md) for the current protocol and the
+> `SmartDevice` firmware README for board setup. Apply migration
+> `0007_device_pairing_keys.sql` before deploying the pairing-enabled Worker.
+
 ## Prerequisites
 
 - Existing authentication Worker with JWT tokens

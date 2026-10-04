@@ -11,13 +11,14 @@ import {
   listHouseDevices,
   listHouses,
   listTenants,
+  rotateDevicePairingKey,
   updateDevice,
   updateHouse,
   updateTenant
 } from './tenant.js';
 import { getAuthUser, login, refreshToken, requestReset, resetPassword, signup, updatePassword, verifyJwt } from './auth.js';
 import { createRateLimiter } from './lib/rateLimit.js';
-import { issueWebSocketTicket, validateWebSocketTicket } from './lib/websocketTicket.js';
+import { issueDeviceWebSocketTicket, issueWebSocketTicket, validateWebSocketTicket } from './lib/websocketTicket.js';
 import { HouseRoom } from './houseRoom.js';
 import { DeviceRoom } from './deviceRoom.js';
 
@@ -103,6 +104,7 @@ async function handleHouseRoomWebSocket(request, env, url) {
   const sessionUrl = new URL(request.url);
   sessionUrl.searchParams.set('sessionId', validation.sessionId || generateUUID());
   sessionUrl.searchParams.set('userId', validation.userId);
+  sessionUrl.searchParams.set('houseId', validation.houseId);
   sessionUrl.searchParams.set('clientType', validation.clientType);
   if (validation.deviceId) {
     sessionUrl.searchParams.set('deviceId', validation.deviceId);
@@ -115,64 +117,6 @@ async function handleHouseRoomWebSocket(request, env, url) {
     method: request.method,
     headers: request.headers
   }));
-}
-
-/**
- * Handle ESP32 device WebSocket connection
- *
- * Stage 1:
- * - Accept WSS connection
- * - No authentication yet
- * - Send connection confirmation
- * - Echo received JSON
- */
-async function handleDeviceWebSocket(
-  request,
-  env
-) {
-
-  if (
-    request.headers
-      .get("Upgrade")
-      ?.toLowerCase() !== "websocket"
-  ) {
-
-    return json(
-      {
-        error:
-          "Expected WebSocket upgrade"
-      },
-      426
-    );
-  }
-
-  console.log(
-    "[DEVICE-WS] Routing connection to DeviceRoom"
-  );
-
-  // ----------------------------------------------------------
-  // Temporary Stage 1.5 ID
-  // ----------------------------------------------------------
-  //
-  // For now every device connects to the same DeviceRoom.
-  //
-  // Later:
-  //
-  // deviceId -> specific DeviceRoom
-  //
-  // ----------------------------------------------------------
-
-  const id =
-    env.DEVICE_ROOM.idFromName(
-      "device-room"
-    );
-
-  const stub =
-    env.DEVICE_ROOM.get(id);
-
-  return stub.fetch(
-    request
-  );
 }
 
 export { HouseRoom , DeviceRoom };
@@ -282,6 +226,8 @@ export default {
     .house-selector select { min-width: min(100%, 260px); padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: white; color: var(--text); font: inherit; }
     .device-edit-form { display: grid; gap: 10px; margin: 14px 0; }
     .device-edit-form input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--text); }
+    .pairing-key-panel { margin: 14px 0; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #eff6ff; }
+    .pairing-key-panel code { display: block; margin: 10px 0; padding: 10px; overflow-wrap: anywhere; background: white; border-radius: 8px; }
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } }
   </style>
 </head>
@@ -468,9 +414,10 @@ export default {
       const html = visibleDevices.map(function(device) {
         const online = ['online', 'active', 'on'].includes(String(device.status || '').toLowerCase());
         const management = state.role === 'admin' || state.role === 'owner';
-        const controls = management
-          ? '<div class="inline-actions"><button class="mini-btn" type="button" data-device-command="on" data-device-id="' + device.id + '">Turn on</button><button class="mini-btn" type="button" data-device-command="off" data-device-id="' + device.id + '">Turn off</button></div><form class="device-edit-form" data-device-id="' + device.id + '"><input name="name" aria-label="Device name" value="' + escapeHtml(device.device_name || '') + '" required /><input name="type" aria-label="Device type" value="' + escapeHtml(device.device_type || '') + '" required /><div class="inline-actions"><button class="mini-btn" type="submit">Save</button><button class="mini-btn" type="button" data-delete-device="' + device.id + '">Delete</button></div></form>'
-          : '<div class="inline-actions"><button class="mini-btn" type="button" data-device-command="on" data-device-id="' + device.id + '">Turn on</button><button class="mini-btn" type="button" data-device-command="off" data-device-id="' + device.id + '">Turn off</button></div>';
+        const controls = '<div class="inline-actions"><button class="mini-btn" type="button" data-device-command="relay1_on" data-device-id="' + device.id + '">Relay 1 on</button><button class="mini-btn" type="button" data-device-command="relay1_off" data-device-id="' + device.id + '">Relay 1 off</button><button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="true" data-device-id="' + device.id + '">Relay 2 on</button><button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="false" data-device-id="' + device.id + '">Relay 2 off</button></div>' +
+          (management
+            ? '<form class="device-edit-form" data-device-id="' + device.id + '"><input name="name" aria-label="Device name" value="' + escapeHtml(device.device_name || '') + '" required /><input name="type" aria-label="Device type" value="' + escapeHtml(device.device_type || '') + '" required /><div class="inline-actions"><button class="mini-btn" type="submit">Save</button><button class="mini-btn" type="button" data-delete-device="' + device.id + '">Delete</button></div></form><div class="inline-actions"><span class="tag">' + (device.pairing_configured ? 'ESP32 paired' : 'ESP32 not paired') + '</span><button class="mini-btn" type="button" data-pair-device="' + device.id + '">' + (device.pairing_configured ? 'Regenerate pairing key' : 'Pair ESP32') + '</button></div>'
+            : '');
         return '<div class="device-card"><h3>' + escapeHtml(device.device_name || 'Device ' + device.id) + '</h3><div class="meta">Type: ' + escapeHtml(device.device_type || 'Unknown') + '<br />House: ' + escapeHtml(selectedHouse.name || 'House ' + selectedHouse.id) + '</div><span class="device-status ' + (online ? 'online' : 'offline') + '">' + escapeHtml(device.status || 'offline') + '</span>' + controls + '</div>';
       }).join('');
       const options = state.houses.map(function(house) {
@@ -486,6 +433,35 @@ export default {
         renderMainPanel();
       });
       const deviceNotice = document.getElementById('deviceNotice');
+      function showPairingKey(deviceId, pairingKey) {
+        const notice = document.getElementById('deviceNotice');
+        if (!notice) return;
+        const apiUrl = new URL(API_BASE);
+        const panel = document.createElement('div');
+        panel.className = 'pairing-key-panel';
+        const heading = document.createElement('strong');
+        heading.textContent = 'One-time ESP32 pairing key';
+        const instructions = document.createElement('p');
+        instructions.textContent = 'Save this key now. Configure API host ' + apiUrl.hostname + ', port ' + (apiUrl.port || (apiUrl.protocol === 'https:' ? '443' : '80')) + ', secure ' + (apiUrl.protocol === 'https:' ? 'true' : 'false') + ', device ID ' + deviceId + ', enable authentication, and paste the key as the device credential. The key will not be shown again.';
+        const key = document.createElement('code');
+        key.textContent = pairingKey;
+        const copy = document.createElement('button');
+        copy.className = 'mini-btn';
+        copy.type = 'button';
+        copy.textContent = 'Copy pairing key';
+        copy.addEventListener('click', async function() {
+          try {
+            await navigator.clipboard.writeText(pairingKey);
+            copy.textContent = 'Copied';
+          } catch (error) {
+            console.error('Could not copy device pairing key:', error);
+            copy.textContent = 'Select and copy the key above';
+          }
+        });
+        panel.append(heading, instructions, key, copy);
+        notice.replaceChildren(panel);
+        notice.className = 'alert success show';
+      }
       async function refreshDevices() {
         state.devices = [];
         await loadDashboardData();
@@ -497,8 +473,9 @@ export default {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         try {
-          await requestJson(API_BASE + '/api/houses/' + selectedHouseId + '/devices', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ name: formData.get('name'), type: formData.get('type') }) });
+          const result = await requestJson(API_BASE + '/api/houses/' + selectedHouseId + '/devices', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ name: formData.get('name'), type: formData.get('type') }) });
           await refreshDevices();
+          showPairingKey(result.device.id, result.pairing_key);
         } catch (error) {
           showAlert(deviceNotice, error.message || 'Unable to add device.', 'error');
         }
@@ -526,6 +503,18 @@ export default {
           }
         });
       });
+      document.querySelectorAll('[data-pair-device]').forEach(function(button) {
+        button.addEventListener('click', async function() {
+          if (!window.confirm('Generate a new pairing key? The current key will stop working.')) return;
+          try {
+            const result = await requestJson(API_BASE + '/api/devices/' + button.dataset.pairDevice + '/pairing-key', { method: 'POST', headers: getAuthHeaders() });
+            await refreshDevices();
+            showPairingKey(button.dataset.pairDevice, result.pairing_key);
+          } catch (error) {
+            showAlert(document.getElementById('deviceNotice') || deviceNotice, error.message || 'Unable to pair device.', 'error');
+          }
+        });
+      });
       document.querySelectorAll('[data-device-command]').forEach(function(button) {
         button.addEventListener('click', async function() {
           button.disabled = true;
@@ -538,20 +527,33 @@ export default {
             });
             socket = new WebSocket(API_BASE.replace(/^http/, 'ws') + '/ws/house/' + selectedHouseId + '?ticket=' + encodeURIComponent(ticketData.ticket));
             await new Promise(function(resolve, reject) {
-              const timeout = window.setTimeout(function() {
+              let timeout = window.setTimeout(function() {
                 socket.close();
                 reject(new Error('Device did not acknowledge the command in time.'));
               }, 10000);
               socket.addEventListener('open', function() {
-                socket.send(JSON.stringify({ type: 'device_command', targetDeviceId: Number(button.dataset.deviceId), command: button.dataset.deviceCommand }));
+                socket.send(JSON.stringify({
+                  type: 'device_command',
+                  targetDeviceId: Number(button.dataset.deviceId),
+                  command: button.dataset.deviceCommand,
+                  id: button.dataset.controlId || '',
+                  state: button.dataset.controlState === 'true'
+                }));
               }, { once: true });
               socket.addEventListener('message', function(event) {
                 let message;
                 try { message = JSON.parse(event.data); } catch { return; }
                 if (message.type === 'command_routed') {
                   window.clearTimeout(timeout);
+                  timeout = window.setTimeout(function() {
+                    socket.close();
+                    reject(new Error('The device did not confirm the command.'));
+                  }, 10000);
+                } else if (message.type === 'device_response' && Number(message.deviceId) === Number(button.dataset.deviceId)) {
+                  window.clearTimeout(timeout);
                   socket.close();
-                  resolve();
+                  if (message.success === false) reject(new Error(message.message || 'The device rejected the command.'));
+                  else resolve();
                 } else if (message.type === 'error') {
                   window.clearTimeout(timeout);
                   socket.close();
@@ -775,12 +777,13 @@ export default {
         return withCors(await issueWebSocketTicket(request, env), allowOrigin);
       }
 
-      // ESP32 device WebSocket
-      if (
-        url.pathname === '/ws/device' &&
-        request.method === 'GET'
-      ) {
-        return handleDeviceWebSocket(request,env);
+      if (url.pathname === '/ws/device-ticket' && request.method === 'POST') {
+        return withCors(await issueDeviceWebSocketTicket(request, env), allowOrigin);
+      }
+
+      // The legacy device endpoint has no device-bound ticket and must not be used.
+      if (url.pathname === '/ws/device') {
+        return withCors(json({ error: 'Use the paired /ws/house/:houseId connection flow' }, 410), allowOrigin);
       }
 
       // WebSocket handler for house rooms
@@ -846,7 +849,12 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/devices/')) {
-        const id = url.pathname.split('/').filter(Boolean).pop();
+        const pathParts = url.pathname.split('/').filter(Boolean);
+        const id = pathParts[2];
+
+        if (pathParts.length === 4 && pathParts[3] === 'pairing-key' && request.method === 'POST') {
+          return withCors(await rotateDevicePairingKey(request, env, authUser.user, id), allowOrigin);
+        }
 
         if (request.method === 'GET') {
           return withCors(await getDevice(request, env, authUser.user, id), allowOrigin);

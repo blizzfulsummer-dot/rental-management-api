@@ -397,6 +397,21 @@
       background: #fff;
       color: var(--text);
     }
+    .pairing-key-panel {
+      margin: 14px 0;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #eff6ff;
+    }
+    .pairing-key-panel code {
+      display: block;
+      margin: 10px 0;
+      padding: 10px;
+      overflow-wrap: anywhere;
+      background: white;
+      border-radius: 8px;
+    }
 
     .house-selector {
       display: flex;
@@ -747,8 +762,10 @@
             ${escapeHtml(device.status || 'offline')}
           </span>
           <div class="inline-actions">
-            <button class="mini-btn" type="button" data-device-command="on" data-device-id="${device.id}">Turn on</button>
-            <button class="mini-btn" type="button" data-device-command="off" data-device-id="${device.id}">Turn off</button>
+            <button class="mini-btn" type="button" data-device-command="relay1_on" data-device-id="${device.id}">Relay 1 on</button>
+            <button class="mini-btn" type="button" data-device-command="relay1_off" data-device-id="${device.id}">Relay 1 off</button>
+            <button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="true" data-device-id="${device.id}">Relay 2 on</button>
+            <button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="false" data-device-id="${device.id}">Relay 2 off</button>
           </div>
           ${canManageDevices ? `
             <form class="device-edit-form" data-device-id="${device.id}">
@@ -759,6 +776,10 @@
                 <button class="mini-btn" type="button" data-delete-device="${device.id}">Delete</button>
               </div>
             </form>
+            <div class="inline-actions">
+              <span class="tag">${device.pairing_configured ? 'ESP32 paired' : 'ESP32 not paired'}</span>
+              <button class="mini-btn" type="button" data-pair-device="${device.id}">${device.pairing_configured ? 'Regenerate pairing key' : 'Pair ESP32'}</button>
+            </div>
           ` : ''}
         </div>
       `).join('');
@@ -795,6 +816,34 @@
       });
 
       const deviceNotice = document.getElementById('deviceNotice');
+      function showPairingKey(deviceId, pairingKey) {
+        const notice = document.getElementById('deviceNotice');
+        if (!notice) return;
+        const panel = document.createElement('div');
+        panel.className = 'pairing-key-panel';
+        const apiUrl = new URL(API_BASE);
+        const heading = document.createElement('strong');
+        heading.textContent = 'One-time ESP32 pairing key';
+        const instructions = document.createElement('p');
+        instructions.textContent = `Save this key now. In the ESP32 setup portal configure API host ${apiUrl.hostname}, port ${apiUrl.port || (apiUrl.protocol === 'https:' ? '443' : '80')}, secure ${apiUrl.protocol === 'https:' ? 'true' : 'false'}, device ID ${deviceId}, enable authentication, and paste the key as the device credential. The key will not be shown again.`;
+        const key = document.createElement('code');
+        key.textContent = pairingKey;
+        const copy = document.createElement('button');
+        copy.className = 'mini-btn';
+        copy.type = 'button';
+        copy.textContent = 'Copy pairing key';
+        copy.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(pairingKey);
+            copy.textContent = 'Copied';
+          } catch {
+            copy.textContent = 'Select and copy the key above';
+          }
+        });
+        panel.append(heading, instructions, key, copy);
+        notice.replaceChildren(panel);
+        notice.className = 'alert success show';
+      }
       const refreshDevices = async () => {
         state.devices = [];
         await loadDashboardData();
@@ -806,14 +855,15 @@
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         try {
-          await requestJson(`${API_BASE}/api/houses/${selectedHouseId}/devices`, {
+          const result = await requestJson(`${API_BASE}/api/houses/${selectedHouseId}/devices`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({ name: formData.get('name'), type: formData.get('type') })
           });
           await refreshDevices();
+          showPairingKey(result.device.id, result.pairing_key);
         } catch (error) {
-          showAlert(deviceNotice, error.message || 'Unable to add device.', 'error');
+          showAlert(document.getElementById('deviceNotice') || deviceNotice, error.message || 'Unable to add device.', 'error');
         }
       });
 
@@ -829,7 +879,7 @@
             });
             await refreshDevices();
           } catch (error) {
-            showAlert(deviceNotice, error.message || 'Unable to update device.', 'error');
+            showAlert(document.getElementById('deviceNotice') || deviceNotice, error.message || 'Unable to update device.', 'error');
           }
         });
       });
@@ -844,7 +894,23 @@
             });
             await refreshDevices();
           } catch (error) {
-            showAlert(deviceNotice, error.message || 'Unable to delete device.', 'error');
+            showAlert(document.getElementById('deviceNotice') || deviceNotice, error.message || 'Unable to delete device.', 'error');
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-pair-device]').forEach(button => {
+        button.addEventListener('click', async () => {
+          if (!window.confirm('Generate a new pairing key? The current key will stop working.')) return;
+          try {
+            const result = await requestJson(`${API_BASE}/api/devices/${button.dataset.pairDevice}/pairing-key`, {
+              method: 'POST',
+              headers: getAuthHeaders()
+            });
+            await refreshDevices();
+            showPairingKey(button.dataset.pairDevice, result.pairing_key);
+          } catch (error) {
+            showAlert(document.getElementById('deviceNotice') || deviceNotice, error.message || 'Unable to pair device.', 'error');
           }
         });
       });
@@ -864,7 +930,7 @@
             });
             const socket = new WebSocket(`${WS_BASE}/ws/house/${selectedHouseId}?ticket=${encodeURIComponent(ticketData.ticket)}`);
             await new Promise((resolve, reject) => {
-              const timeout = window.setTimeout(() => {
+              let timeout = window.setTimeout(() => {
                 socket.close();
                 reject(new Error('Device did not acknowledge the command in time.'));
               }, 10000);
@@ -872,7 +938,10 @@
                 socket.send(JSON.stringify({
                   type: 'device_command',
                   targetDeviceId: Number(button.dataset.deviceId),
-                  command: button.dataset.deviceCommand
+                  command: button.dataset.deviceCommand,
+                  id: button.dataset.controlId || '',
+                  state: button.dataset.controlState === 'true',
+                  params: {}
                 }));
               }, { once: true });
               socket.addEventListener('message', event => {
@@ -884,8 +953,15 @@
                 }
                 if (message.type === 'command_routed') {
                   window.clearTimeout(timeout);
+                  timeout = window.setTimeout(() => {
+                    socket.close();
+                    reject(new Error('The device did not confirm the command.'));
+                  }, 10000);
+                } else if (message.type === 'device_response' && Number(message.deviceId) === Number(button.dataset.deviceId)) {
+                  window.clearTimeout(timeout);
                   socket.close();
-                  resolve();
+                  if (message.success === false) reject(new Error(message.message || 'The device rejected the command.'));
+                  else resolve();
                 } else if (message.type === 'error') {
                   window.clearTimeout(timeout);
                   socket.close();

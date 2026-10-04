@@ -186,7 +186,7 @@ test('admin can create a device using production name and type columns', async (
         async all() {
           if (sql === 'PRAGMA table_info(devices)') {
             return {
-              results: ['id', 'house_id', 'name', 'type', 'status', 'created_at'].map(name => ({ name }))
+              results: ['id', 'house_id', 'name', 'type', 'status', 'created_at', 'device_key_hash'].map(name => ({ name }))
             };
           }
           return { results: [] };
@@ -196,7 +196,7 @@ test('admin can create a device using production name and type columns', async (
             return {
               async all() {
                 return {
-                  results: ['id', 'house_id', 'name', 'type', 'status', 'created_at'].map(name => ({ name }))
+                  results: ['id', 'house_id', 'name', 'type', 'status', 'created_at', 'device_key_hash'].map(name => ({ name }))
                 };
               }
             };
@@ -207,7 +207,17 @@ test('admin can create a device using production name and type columns', async (
             return { async run() { return { meta: { last_row_id: 12 } }; } };
           }
           if (sql.includes('SELECT * FROM devices WHERE id = ?')) {
-            return { async first() { return { id: 12, house_id: 10, name: 'Entry Light', type: 'Switch' }; } };
+            return {
+              async first() {
+                return {
+                  id: 12,
+                  house_id: 10,
+                  name: 'Entry Light',
+                  type: 'Switch',
+                  device_key_hash: insertValues[3]
+                };
+              }
+            };
           }
           return { async first() { return null; }, async all() { return { results: [] }; } };
         }
@@ -225,9 +235,11 @@ test('admin can create a device using production name and type columns', async (
   const payload = await response.json();
 
   assert.equal(response.status, 201);
-  assert.match(insertSql, /INSERT INTO devices \(house_id, name, type, status, created_at\)/);
+  assert.match(insertSql, /INSERT INTO devices \(house_id, name, type, device_key_hash, status, created_at\)/);
   assert.deepEqual(insertValues.slice(0, 3), [10, 'Entry Light', 'Switch']);
   assert.equal(payload.device.device_name, 'Entry Light');
+  assert.equal(payload.device.pairing_configured, true);
+  assert.equal(Object.hasOwn(payload.device, 'device_key_hash'), false);
 });
 
 test('tenant cannot create devices', async () => {

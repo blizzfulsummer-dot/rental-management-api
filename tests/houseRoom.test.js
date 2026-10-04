@@ -42,10 +42,40 @@ test('house room routes a command to the ticketed device session', () => {
 
   room.handleDeviceCommand('web-session', sender, {
     targetDeviceId: 7,
-    command: 'on'
+    command: 'io.set',
+    id: 'relay2',
+    state: true
   });
 
   assert.equal(deviceMessages[0].deviceId, 7);
-  assert.equal(deviceMessages[0].command, 'on');
+  assert.equal(deviceMessages[0].command, 'io.set');
+  assert.equal(deviceMessages[0].id, 'relay2');
+  assert.equal(deviceMessages[0].state, true);
   assert.equal(sender.messages[0].type, 'command_routed');
+});
+
+test('house room only broadcasts a device response matching the paired device', () => {
+  const room = new HouseRoom({ id: 'house-10' }, {});
+  const webSession = createSession('tenant', 7);
+  const deviceSessionMessages = [];
+  room.sessions.set('web-session', webSession);
+  const deviceSession = {
+    clientType: 'device',
+    deviceId: 7,
+    ws: { send(message) { deviceSessionMessages.push(JSON.parse(message)); } }
+  };
+
+  room.handleDeviceResponse('device-session', deviceSession, {
+    deviceId: 8,
+    success: true
+  });
+  assert.equal(deviceSessionMessages[0].type, 'error');
+  assert.equal(webSession.messages.length, 0);
+
+  room.handleDeviceResponse('device-session', deviceSession, {
+    deviceId: 7,
+    success: true
+  });
+  assert.equal(webSession.messages[0].type, 'device_response');
+  assert.equal(webSession.messages[0].deviceId, 7);
 });
