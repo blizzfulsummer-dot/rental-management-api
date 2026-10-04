@@ -230,38 +230,43 @@ export async function resetPassword(request, env) {
 async function getAssignedHouses(env, user) {
   if (user.role === 'admin') {
     const rows = await env.DB.prepare(`
-      SELECT h.id, h.name, h.location, h.owner_id, h.created_at, h.house_uid
+      SELECT h.*
       FROM houses h
       ORDER BY h.created_at DESC
     `).all();
-    return rows.results || [];
+    return (rows.results || []).map(normalizeHouseLocation);
   }
 
   const rows = await env.DB.prepare(`
-    SELECT DISTINCT h.id, h.name, h.location, h.owner_id, h.created_at, h.house_uid
+    SELECT DISTINCT h.*
     FROM houses h
     LEFT JOIN user_house_access uha ON uha.house_id = h.id
     WHERE h.owner_id = ? OR uha.user_id = ?
     ORDER BY h.created_at DESC
   `).bind(user.id, user.id).all();
 
-  return rows.results || [];
+  return (rows.results || []).map(normalizeHouseLocation);
+}
+
+function normalizeHouseLocation(house) {
+  return {
+    ...house,
+    location: house.location ?? house.address ?? null
+  };
 }
 
 export async function verifyJwt(request, env) {
   const auth = request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
 
-  const token = auth.slice(7);
+  let payload;
+  try {
+    ({ payload } = await jwtVerify(auth.slice(7), getSecret(env)));
+  } catch {
+    return json({ error: 'Invalid or expired token' }, 401);
+  }
 
   try {
-    let payload;
-    try {
-      ({ payload } = await jwtVerify(token, getSecret(env)));
-    } catch {
-      return json({ error: 'Invalid or expired token' }, 401);
-    }
-
     const user = await env.DB.prepare('SELECT id, email, role, name FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) return json({ error: 'User not found' }, 401);
 
@@ -277,8 +282,8 @@ export async function verifyJwt(request, env) {
       }
     });
   } catch (error) {
-    console.error('Verify JWT error:', error);
-    return json({ error: 'Invalid or expired token' }, 401);
+    console.error('Verify JWT profile error:', error);
+    return json({ error: 'Failed to load user profile' }, 500);
   }
 }
 

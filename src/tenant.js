@@ -349,33 +349,38 @@ async function userHasHouseAccess(env, userId, houseId) {
 
 export async function listHouses(request, env, authUser) {
   try {
+    const normalizeHouse = (house) => ({
+      ...house,
+      location: house.location ?? house.address ?? null
+    });
+
     if (authUser.role === 'admin') {
       const rows = await env.DB
         .prepare(`
-          SELECT h.id, h.name, h.location, h.owner_id, h.created_at, h.house_uid
+          SELECT h.*
           FROM houses h
           ORDER BY h.created_at DESC
         `)
         .all();
-      return json({ houses: rows.results || [] });
+      return json({ houses: (rows.results || []).map(normalizeHouse) });
     }
 
     if (authUser.role === 'owner') {
       const rows = await env.DB
         .prepare(`
-          SELECT h.id, h.name, h.location, h.owner_id, h.created_at, h.house_uid
+          SELECT h.*
           FROM houses h
           WHERE h.owner_id = ?
           ORDER BY h.created_at DESC
         `)
         .bind(authUser.id)
         .all();
-      return json({ houses: rows.results || [] });
+      return json({ houses: (rows.results || []).map(normalizeHouse) });
     }
 
     const rows = await env.DB
       .prepare(`
-        SELECT DISTINCT h.id, h.name, h.location, h.owner_id, h.created_at, h.house_uid
+        SELECT DISTINCT h.*
         FROM houses h
         LEFT JOIN user_house_access uha ON uha.house_id = h.id
         WHERE h.owner_id = ? OR uha.user_id = ?
@@ -384,7 +389,7 @@ export async function listHouses(request, env, authUser) {
       .bind(authUser.id, authUser.id)
       .all();
 
-    return json({ houses: rows.results || [] });
+    return json({ houses: (rows.results || []).map(normalizeHouse) });
   } catch (error) {
     console.error('List houses error:', error);
     return json({ error: 'Failed to fetch houses' }, 500);
@@ -651,4 +656,3 @@ function json(data, status = 200) {
     headers: { 'Content-Type': 'application/json' }
   });
 }
-

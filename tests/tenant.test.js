@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SignJWT } from 'jose';
-import { getAuthUser } from '../src/auth.js';
+import { verifyJwt } from '../src/auth.js';
 import { createDevice, createHouse, getTenant, listHouseDevices, listHouses, listTenants, updateTenant } from '../src/tenant.js';
 
 async function hashPassword(password) {
@@ -131,11 +131,11 @@ test('admin can fetch an empty device list for an existing house', async () => {
   assert.deepEqual(payload.devices, []);
 });
 
-test('auth user includes assigned houses from user_house_access', async () => {
+test('profile endpoint includes assigned houses using production address column', async () => {
   const db = {
     prepare(sql) {
       return {
-        bind(...args) {
+        bind() {
           return {
             async first() {
               if (sql.includes('FROM users WHERE id = ?')) {
@@ -147,7 +147,7 @@ test('auth user includes assigned houses from user_house_access', async () => {
               if (sql.includes('LEFT JOIN user_house_access')) {
                 return {
                   results: [
-                    { id: 7, name: 'Main House', location: 'A-12', owner_id: 1, created_at: '2026-01-01T00:00:00Z', house_uid: 'HSE-000007' }
+                    { id: 7, name: 'Main House', address: 'A-12', owner_id: 1, created_at: '2026-01-01T00:00:00Z', house_uid: 'HSE-000007' }
                   ]
                 };
               }
@@ -169,9 +169,12 @@ test('auth user includes assigned houses from user_house_access', async () => {
     headers: { Authorization: `Bearer ${token}` }
   });
 
-  const result = await getAuthUser(request, { DB: db, JWT_SCRT: 'test-secret' });
+  const response = await verifyJwt(request, { DB: db, JWT_SCRT: 'test-secret' });
+  const result = await response.json();
 
+  assert.equal(response.status, 200);
   assert.equal(result.user.role, 'tenant');
   assert.equal(result.user.assigned_house.name, 'Main House');
+  assert.equal(result.user.assigned_house.location, 'A-12');
   assert.equal(result.user.assigned_houses[0].id, 7);
 });
