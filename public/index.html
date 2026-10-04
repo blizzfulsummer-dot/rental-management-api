@@ -1,833 +1,784 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Home Dashboard</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rental Management Portal</title>
+  <style>
+    :root {
+      --bg: #eef4ff;
+      --panel: #ffffff;
+      --panel-soft: #f7f9ff;
+      --primary: #3b82f6;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #dfe7ff;
+      --shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+      --radius: 18px;
+    }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(135deg, #e0ecff 0%, #f3f6ff 50%, #eef2ff 100%);
+      color: var(--text);
+    }
 
-        .container {
-            width: 100%;
-            max-width: 1200px;
-        }
+    button, input, select {
+      font: inherit;
+    }
 
-        /* ============= LOGIN SCREEN ============= */
-        .login-screen {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+    .screen {
+      display: none;
+      min-height: 100vh;
+      padding: 28px;
+    }
+    .screen.active { display: block; }
 
-        .login-card {
-            background: white;
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            width: 100%;
-            max-width: 400px;
-        }
+    .login-shell {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
 
-        .login-card h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
+    .login-card {
+      width: min(100%, 420px);
+      background: rgba(255,255,255,0.96);
+      border: 1px solid rgba(148,163,184,0.28);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 32px 28px;
+    }
 
-        .login-card p {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--primary);
+      font-weight: 700;
+    }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+    h1, h2, h3, h4, p { margin-top: 0; }
+    .login-card h1 {
+      font-size: clamp(2rem, 3vw, 2.5rem);
+      margin-bottom: 8px;
+    }
 
-        .form-group label {
-            display: block;
-            color: #333;
-            margin-bottom: 8px;
-            font-weight: 500;
-            font-size: 14px;
-        }
+    .subtle {
+      color: var(--muted);
+      margin-bottom: 26px;
+      line-height: 1.5;
+    }
 
-        .form-group input {
-            width: 100%;
-            padding: 12px 15px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+    }
+    .field input:focus, .field select:focus {
+      outline: 2px solid rgba(59,130,246,0.25);
+      border-color: var(--primary);
+    }
 
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
+    .primary-btn, .secondary-btn, .ghost-btn {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+    .primary-btn {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      box-shadow: 0 12px 18px rgba(59,130,246,0.18);
+      width: 100%;
+    }
+    .secondary-btn {
+      background: linear-gradient(135deg, #22c55e, #15803d);
+      color: white;
+    }
+    .ghost-btn {
+      background: #eef4ff;
+      color: var(--primary-dark);
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.7; cursor: wait; }
 
-        .login-btn {
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
+    .alert {
+      display: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      margin-top: 18px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .alert.show { display: block; }
+    .alert.error {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    .alert.success {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
 
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
+    .topbar {
+      max-width: 1200px;
+      margin: 0 auto 20px;
+      background: rgba(255,255,255,0.88);
+      border: 1px solid rgba(148,163,184,0.2);
+      border-radius: 18px;
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      box-shadow: var(--shadow);
+    }
 
-        .login-btn:active {
-            transform: translateY(0);
-        }
+    .brand {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--text);
+    }
 
-        .login-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
+    .user-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
 
-        .error-message {
-            color: #e74c3c;
-            font-size: 14px;
-            margin-top: 15px;
-            padding: 10px;
-            background: #fadbd8;
-            border-radius: 6px;
-            display: none;
-        }
+    .role-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
 
-        .error-message.show {
-            display: block;
-        }
+    .dashboard {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-bottom: 36px;
+    }
 
-        /* ============= DASHBOARD SCREEN ============= */
-        .dashboard-screen {
-            display: none;
-        }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 18px;
+      margin: 24px 0;
+    }
 
-        .dashboard-header {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+    .stat-card {
+      background: var(--panel);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+    .stat-value {
+      font-size: clamp(1.7rem, 2vw, 2.3rem);
+      font-weight: 800;
+      line-height: 1;
+    }
 
-        .dashboard-header h1 {
-            color: #333;
-            font-size: 24px;
-        }
+    .layout {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 22px;
+      align-items: start;
+    }
 
-        .header-info {
-            text-align: right;
-        }
+    .panel {
+      background: var(--panel);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
 
-        .header-info p {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 8px;
-        }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
 
-        .logout-btn {
-            padding: 8px 16px;
-            background: #e74c3c;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
+    .list-grid, .card-grid {
+      display: grid;
+      gap: 14px;
+    }
+    .card-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .house-card, .tenant-card, .device-card, .profile-card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--panel-soft);
+      padding: 16px;
+    }
 
-        .logout-btn:hover {
-            background: #c0392b;
-        }
+    .house-card h3, .tenant-card h3, .device-card h3 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #e0f2fe;
+      color: #0369a1;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
 
-        /* ============= STATUS & ALERTS ============= */
-        .status-bar {
-            background: white;
-            padding: 15px 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
+    .inline-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
 
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #e74c3c;
-        }
+    .mini-btn {
+      border: none;
+      background: #e0ecff;
+      color: var(--primary-dark);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .mini-btn.danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
 
-        .status-indicator.connected {
-            background: #27ae60;
-            animation: pulse 2s infinite;
-        }
+    .profile-card {
+      display: grid;
+      gap: 10px;
+    }
+    .profile-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(148,163,184,0.25);
+    }
+    .profile-line:last-child { border-bottom: none; }
+    .label { color: var(--muted); }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
+    .device-status {
+      display: inline-block;
+      padding: 5px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .device-status.online {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .device-status.offline {
+      background: #fee2e2;
+      color: #991b1b;
+    }
 
-        .status-text {
-            color: #666;
-            font-size: 14px;
-            font-weight: 500;
-        }
+    .password-form {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
 
-        .status-text.connected {
-            color: #27ae60;
-        }
+    .empty {
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+      padding: 22px;
+      color: var(--muted);
+      text-align: center;
+      background: rgba(255,255,255,0.4);
+    }
 
-        .status-text.error {
-            color: #e74c3c;
-        }
-
-        /* ============= DEVICES GRID ============= */
-        .devices-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-        }
-
-        .device-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-
-        .device-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-        }
-
-        .device-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 15px;
-        }
-
-        .device-info h3 {
-            color: #333;
-            font-size: 18px;
-            margin-bottom: 5px;
-        }
-
-        .device-type {
-            color: #999;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .device-status {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .device-status.online {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .device-status.offline {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .device-body {
-            margin-bottom: 15px;
-        }
-
-        .device-prop {
-            display: flex;
-            justify-content: space-between;
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 8px;
-        }
-
-        .device-prop strong {
-            color: #333;
-        }
-
-        .device-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
-        .device-btn {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            background: white;
-            color: #333;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .device-btn:hover {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        .device-btn.danger {
-            background: #ffe0e0;
-            color: #c0392b;
-            border-color: #e74c3c;
-        }
-
-        .device-btn.danger:hover {
-            background: #e74c3c;
-            color: white;
-            border-color: #c0392b;
-        }
-
-        .device-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* ============= EMPTY STATE ============= */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            background: white;
-            border-radius: 12px;
-            color: #999;
-        }
-
-        .empty-state h2 {
-            color: #666;
-            margin-bottom: 10px;
-        }
-
-        /* ============= MESSAGE LOG ============= */
-        .message-log {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 30px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .message-log h3 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 16px;
-        }
-
-        .message-item {
-            padding: 10px;
-            background: #f8f9fa;
-            border-left: 3px solid #667eea;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #666;
-            font-family: 'Courier New', monospace;
-        }
-
-        .message-item.system {
-            border-left-color: #27ae60;
-            background: #d4edda;
-        }
-
-        .message-item.error {
-            border-left-color: #e74c3c;
-            background: #f8d7da;
-        }
-
-        .message-time {
-            color: #999;
-            font-size: 11px;
-        }
-
-        /* ============= RESPONSIVE ============= */
-        @media (max-width: 768px) {
-            .login-card {
-                padding: 30px 20px;
-            }
-
-            .dashboard-header {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-
-            .header-info {
-                text-align: center;
-            }
-
-            .devices-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .device-actions {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .loading {
-            display: inline-block;
-            width: 4px;
-            height: 4px;
-            background: currentColor;
-            border-radius: 50%;
-            margin: 0 2px;
-            animation: loading 1.4s infinite;
-        }
-
-        @keyframes loading {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 1; }
-        }
-    </style>
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .dashboard { padding: 0 10px 24px; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
 </head>
 <body>
-    <!-- ============= LOGIN SCREEN ============= -->
-    <div class="login-screen" id="loginScreen">
-        <div class="login-card">
-            <h1>Smart Home</h1>
-            <p>Property Management System</p>
-            
-            <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" placeholder="admin@example.com" value="admin@example.com">
-            </div>
+  <div id="loginScreen" class="screen active">
+    <div class="login-shell">
+      <div class="login-card">
+        <p class="eyebrow">Rental Management</p>
+        <h1>Smart Home Access</h1>
+        <p class="subtle">Secure portal for owners, admins, tenants and users.</p>
 
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" placeholder="Password" value="AdminPass123!">
-            </div>
-
-            <button class="login-btn" id="loginBtn" onclick="handleLogin()">Sign In</button>
-
-            <div class="error-message" id="loginError"></div>
-
-            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
-                <p><strong>Demo Credentials:</strong></p>
-                <!--<p>Email: admin@example.com</p>
-                <p>Password: AdminPass123!</p>-->
-            </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" value="admin@example.com" autocomplete="email" />
         </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" value="AdminPass123!" autocomplete="current-password" />
+        </div>
+
+        <button id="loginBtn" class="primary-btn" type="button">Sign In</button>
+        <div id="loginAlert" class="alert error"></div>
+      </div>
     </div>
+  </div>
 
-    <!-- ============= DASHBOARD SCREEN ============= -->
-    <div class="dashboard-screen" id="dashboardScreen">
-        <div class="dashboard-header">
-            <h1>🏠 Smart Home Dashboard</h1>
-            <div class="header-info">
-                <p><strong id="userName">User</strong></p>
-                <p id="connectionStatus" style="color: #e74c3c;">Connecting<span class="loading">.</span><span class="loading">.</span><span class="loading">.</span></p>
-                <button class="logout-btn" onclick="handleLogout()">Logout</button>
-            </div>
-        </div>
+  <div id="dashboardScreen" class="screen">
+    <header class="topbar">
+      <div class="brand">Rental Management Portal</div>
+      <div class="user-meta">
+        <span id="userRole" class="role-pill">Role</span>
+        <strong id="userDisplayName">User</strong>
+        <button id="logoutBtn" class="ghost-btn" type="button">Logout</button>
+      </div>
+    </header>
 
-        <div class="status-bar">
-            <div class="status-indicator" id="statusIndicator"></div>
-            <span class="status-text" id="statusText">Connecting to WebSocket...</span>
-        </div>
+    <div class="dashboard">
+      <div id="statsGrid" class="stat-grid"></div>
 
-        <div id="devicesContainer">
-            <div class="empty-state">
-                <h2>Loading devices...</h2>
-            </div>
-        </div>
+      <div class="layout">
+        <section class="panel">
+          <div class="panel-header">
+            <h2 id="mainPanelTitle">Overview</h2>
+            <button id="refreshBtn" class="secondary-btn" type="button">Refresh</button>
+          </div>
+          <div id="mainPanelContent" class="list-grid"></div>
+        </section>
 
-        <div class="message-log">
-            <h3>Activity Log</h3>
-            <div id="messageLog"></div>
-        </div>
+        <aside class="panel">
+          <div class="panel-header">
+            <h2>Profile</h2>
+          </div>
+          <div id="profilePanel" class="profile-card"></div>
+
+          <div class="panel-header" style="margin-top:24px;">
+            <h2>Change password</h2>
+          </div>
+          <form id="passwordForm" class="password-form">
+            <input id="oldPassword" type="password" placeholder="Current password" />
+            <input id="newPassword" type="password" placeholder="New password" />
+            <button type="submit" class="primary-btn" style="width:100%;">Update Password</button>
+          </form>
+          <div id="passwordAlert" class="alert"></div>
+        </aside>
+      </div>
     </div>
+  </div>
 
-    <script>
-        // ============= CONFIG =============
-        const API_BASE = 'https//api.ehexibit.com';
-        const WS_BASE = 'ws://api.ehexibit.com';
+  <script>
+    const API_BASE = window.location.origin || 'http://localhost:8787';
+    const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
-        // ============= STATE =============
-        let state = {
-            jwt: null,
-            userId: null,
-            userName: null,
-            houseId: 1,
-            sessionId: null,
-            ws: null,
-            devices: new Map(),
-            sessions: new Map()
-        };
+    const state = {
+      jwt: '',
+      profile: null,
+      role: null,
+      houses: [],
+      tenants: [],
+      selectedHouseId: null,
+      devices: [],
+      ws: null
+    };
 
-        // ============= LOGGING =============
-        function addMessage(message, type = 'info') {
-            const log = document.getElementById('messageLog');
-            const item = document.createElement('div');
-            const now = new Date().toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit',
-                hour12: true 
-            });
+    const loginScreen = document.getElementById('loginScreen');
+    const dashboardScreen = document.getElementById('dashboardScreen');
+    const loginAlert = document.getElementById('loginAlert');
+    const passwordAlert = document.getElementById('passwordAlert');
+    const mainPanelContent = document.getElementById('mainPanelContent');
+    const profilePanel = document.getElementById('profilePanel');
+    const statsGrid = document.getElementById('statsGrid');
+    const userDisplayName = document.getElementById('userDisplayName');
+    const userRole = document.getElementById('userRole');
+    const mainPanelTitle = document.getElementById('mainPanelTitle');
 
-            item.className = `message-item ${type}`;
-            item.innerHTML = `<span class="message-time">${now}</span> ${escapeHtml(message)}`;
-            
-            log.insertBefore(item, log.firstChild);
+    function showAlert(element, message, type) {
+      element.textContent = message;
+      element.className = `alert ${type} show`;
+    }
 
-            // Keep only last 50 messages
-            while (log.children.length > 50) {
-                log.removeChild(log.lastChild);
-            }
+    function clearAlert(element) {
+      element.textContent = '';
+      element.className = 'alert';
+    }
+
+    function formatRole(role) {
+      return role ? role.toUpperCase() : 'USER';
+    }
+
+    function setActiveScreen(screen) {
+      loginScreen.classList.toggle('active', screen === 'login');
+      dashboardScreen.classList.toggle('active', screen === 'dashboard');
+    }
+
+    async function requestJson(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {})
+        }
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Request failed');
+      }
+
+      return data;
+    }
+
+        function getAuthHeaders() {
+      return {
+        Authorization: `Bearer ${state.jwt}`,
+        'Content-Type': 'application/json'
+      };
+    }
+
+    function renderStats() {
+      const role = state.role;
+      let cards = [
+        { label: 'Houses', value: state.houses.length },
+        { label: 'Tenants', value: state.tenants.length },
+        { label: 'Assigned Devices', value: state.devices.length }
+      ];
+
+      if (role === 'tenant' || role === 'user') {
+        cards = [
+          { label: 'Assigned House', value: state.houses.length || 0 },
+          { label: 'Devices', value: state.devices.length },
+          { label: 'Role', value: formatRole(role).slice(0, 6) }
+        ];
+      }
+
+      statsGrid.innerHTML = cards.map(card => `
+        <div class="stat-card">
+          <div class="stat-label">${card.label}</div>
+          <div class="stat-value">${card.value}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderProfile() {
+      const profile = state.profile || {};
+      const isTenantUser = ['tenant', 'user'].includes(state.role);
+      const assignedHouse = isTenantUser && state.houses[0] ? state.houses[0] : null;
+
+      const values = [
+        ['Name', profile.name || 'Not provided'],
+        ['Email', profile.email || 'Not provided'],
+        ['Role', formatRole(state.role)],
+        ['House', assignedHouse ? assignedHouse.name : 'No assigned house'],
+        ['Location', assignedHouse ? (assignedHouse.location || 'N/A') : 'N/A']
+      ];
+
+      profilePanel.innerHTML = values.map(([label, value]) => `
+        <div class="profile-line">
+          <span class="label">${label}</span>
+          <strong>${value}</strong>
+        </div>
+      `).join('');
+    }
+
+    function renderHouseList() {
+      if (!state.houses.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No houses available for this account.</div>';
+        return;
+      }
+
+      const cards = state.houses.map(house => `
+        <div class="house-card">
+          <div class="tag">House</div>
+          <h3>${house.name || 'Unnamed House'}</h3>
+          <div class="meta">${house.location || 'No location'}<br />Owner ID: ${house.owner_id || 'N/A'}</div>
+          <div class="inline-actions">
+            <button class="mini-btn" data-house-id="${house.id}" data-action="select-house">View Devices</button>
+          </div>
+        </div>
+      `).join('');
+
+      mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
+
+      document.querySelectorAll('[data-action="select-house"]').forEach(button => {
+        button.addEventListener('click', () => {
+          const houseId = Number(button.dataset.houseId);
+          state.selectedHouseId = houseId;
+          renderDeviceList();
+        });
+      });
+    }
+
+    function renderTenantList() {
+      if (!state.tenants.length) {
+        return;
+      }
+
+      const html = state.tenants.map(tenant => `
+        <div class="tenant-card">
+          <h3>${tenant.name || tenant.email || 'Tenant'}</h3>
+          <div class="meta">${tenant.email || 'No email'}<br />Unit: ${tenant.leased_unit || 'N/A'}<br />Rent: ${tenant.rent_amount || 'N/A'}</div>
+          <div class="tag">Tenant</div>
+        </div>
+      `).join('');
+
+      const panel = document.createElement('div');
+      panel.className = 'card-grid';
+      panel.innerHTML = html;
+      mainPanelContent.appendChild(panel);
+    }
+
+    function renderDeviceList() {
+      const selectedHouseId = state.selectedHouseId || (state.houses[0] && state.houses[0].id);
+      const visibleDevices = state.devices.filter(device => {
+        if (!selectedHouseId) return true;
+        return Number(device.house_id) === Number(selectedHouseId);
+      });
+
+      if (!visibleDevices.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No devices available for the selected house.</div>';
+        return;
+      }
+
+      const cards = visibleDevices.map(device => `
+        <div class="device-card">
+          <h3>${device.device_name || `Device ${device.id}`}</h3>
+          <div class="meta">Type: ${device.device_type || 'Unknown'}<br />House ID: ${device.house_id || 'N/A'}</div>
+          <span class="device-status ${device.status === 'online' || device.status === 'active' ? 'online' : 'offline'}">
+            ${device.status || 'offline'}
+          </span>
+        </div>
+      `).join('');
+
+      mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
+    }
+
+    function renderMainPanel() {
+      const role = state.role;
+      mainPanelContent.innerHTML = '';
+
+      if (role === 'admin' || role === 'owner') {
+        mainPanelTitle.textContent = role === 'admin' ? 'Admin Overview' : 'Owner Overview';
+        renderHouseList();
+        renderTenantList();
+        return;
+      }
+
+      mainPanelTitle.textContent = 'Assigned Access';
+      const houseList = state.houses.length ? state.houses : [];
+      if (houseList.length) {
+        const cards = houseList.map(house => `
+          <div class="house-card">
+            <div class="tag">House</div>
+            <h3>${house.name || 'Assigned House'}</h3>
+            <div class="meta">${house.location || 'No location'}<br />Owner: ${house.owner_id || 'N/A'}</div>
+            <div class="inline-actions">
+              <button class="mini-btn" data-house-id="${house.id}" data-action="select-house">View Devices</button>
+            </div>
+          </div>
+        `).join('');
+        mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
+
+        document.querySelectorAll('[data-action="select-house"]').forEach(button => {
+          button.addEventListener('click', () => {
+            const houseId = Number(button.dataset.houseId);
+            state.selectedHouseId = houseId;
+            renderDeviceList();
+          });
+        });
+      } else {
+        mainPanelContent.innerHTML = '<div class="empty">No house assignment found for this account.</div>';
+      }
+    }
+
+    async function loadDashboardData() {
+      const headers = getAuthHeaders();
+      state.devices = [];
+      state.tenants = [];
+
+      try {
+        const housesResponse = await fetch(`${API_BASE}/api/houses`, { headers });
+        const housesData = await housesResponse.json();
+        state.houses = Array.isArray(housesData.houses) ? housesData.houses : (Array.isArray(housesData) ? housesData : []);
+
+        if (state.role === 'admin' || state.role === 'owner') {
+          const tenantsResponse = await fetch(`${API_BASE}/api/tenants`, { headers });
+          const tenantsData = await tenantsResponse.json();
+          state.tenants = Array.isArray(tenantsData.tenants) ? tenantsData.tenants : [];
         }
 
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
+        if (state.houses.length) {
+          const visibleHouseId = state.selectedHouseId || state.houses[0].id;
+          state.selectedHouseId = visibleHouseId;
+          for (const house of state.houses) {
+            const devicesResponse = await fetch(`${API_BASE}/api/houses/${house.id}/devices`, { headers });
+            const devicesData = await devicesResponse.json();
+            const devices = Array.isArray(devicesData.devices) ? devicesData.devices : [];
+            state.devices = [...state.devices, ...devices];
+          }
         }
 
-        // ============= LOGIN =============
-        async function handleLogin() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const loginBtn = document.getElementById('loginBtn');
-            const errorDiv = document.getElementById('loginError');
+        renderStats();
+        renderProfile();
+        renderMainPanel();
+      } catch (error) {
+        console.error('Dashboard load error:', error);
+        mainPanelContent.innerHTML = '<div class="empty">Unable to load dashboard data.</div>';
+      }
+    }
 
-            if (!email || !password) {
-                showError('Please enter email and password', errorDiv);
-                return;
-            }
+    async function handleLogin() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const loginBtn = document.getElementById('loginBtn');
 
-            loginBtn.disabled = true;
-            loginBtn.textContent = 'Signing in...';
-            errorDiv.classList.remove('show');
+      if (!email || !password) {
+        showAlert(loginAlert, 'Email and password are required.', 'error');
+        return;
+      }
 
-            try {
-                const response = await fetch(`${API_BASE}/api/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
+      loginBtn.disabled = true;
+      clearAlert(loginAlert);
 
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.message || 'Login failed');
-                }
-
-                state.jwt = data.accessToken;
-                state.userId = data.user.id;
-                state.userName = data.user.email;
-
-                // Show dashboard
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('dashboardScreen').style.display = 'block';
-                document.getElementById('userName').textContent = state.userName;
-
-                addMessage(`✓ Logged in as ${state.userName}`, 'system');
-
-                // Connect to WebSocket
-                await connectToWebSocket();
-            } catch (error) {
-                showError(error.message, errorDiv);
-                addMessage(`✗ Login failed: ${error.message}`, 'error');
-            } finally {
-                loginBtn.disabled = false;
-                loginBtn.textContent = 'Sign In';
-            }
-        }
-
-        function showError(message, element) {
-            element.textContent = message;
-            element.classList.add('show');
-        }
-
-        // ============= WEBSOCKET =============
-        async function connectToWebSocket() {
-            try {
-                addMessage('Requesting WebSocket ticket...', 'system');
-
-                // Get ticket
-                const ticketResponse = await fetch(`${API_BASE}/ws/ticket`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${state.jwt}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        houseId: state.houseId,
-                        clientType: 'web'
-                    })
-                });
-
-                if (!ticketResponse.ok) {
-                    throw new Error('Failed to get WebSocket ticket');
-                }
-
-                const { ticket, sessionId } = await ticketResponse.json();
-                state.sessionId = sessionId;
-
-                addMessage(`✓ Ticket issued (expires in 60s)`, 'system');
-                addMessage(`Connecting to house room...`, 'system');
-
-                // Connect to WebSocket
-                const wsUrl = `${WS_BASE}/ws/house/${state.houseId}?ticket=${ticket}`;
-                state.ws = new WebSocket(wsUrl);
-
-                state.ws.onopen = () => {
-                    addMessage('✓ WebSocket connected!', 'system');
-                    updateStatus('Connected', true);
-                };
-
-                state.ws.onmessage = (event) => {
-                    const message = JSON.parse(event.data);
-                    handleWebSocketMessage(message);
-                };
-
-                state.ws.onerror = (error) => {
-                    addMessage(`✗ WebSocket error: ${error.message || 'Unknown error'}`, 'error');
-                    updateStatus('Error', false);
-                };
-
-                state.ws.onclose = () => {
-                    addMessage('✗ WebSocket disconnected', 'error');
-                    updateStatus('Disconnected', false);
-                };
-
-            } catch (error) {
-                addMessage(`✗ WebSocket connection failed: ${error.message}`, 'error');
-                updateStatus(`Error: ${error.message}`, false);
-            }
-        }
-
-        function updateStatus(text, connected) {
-            const statusText = document.getElementById('statusText');
-            const statusIndicator = document.getElementById('statusIndicator');
-            const connectionStatus = document.getElementById('connectionStatus');
-
-            statusText.textContent = text;
-            statusText.className = `status-text ${connected ? 'connected' : 'error'}`;
-
-            if (connected) {
-                statusIndicator.classList.add('connected');
-                connectionStatus.textContent = '🟢 Connected';
-                connectionStatus.style.color = '#27ae60';
-            } else {
-                statusIndicator.classList.remove('connected');
-                connectionStatus.textContent = '🔴 Disconnected';
-                connectionStatus.style.color = '#e74c3c';
-            }
-        }
-
-        function handleWebSocketMessage(message) {
-            switch (message.type) {
-                case 'connected':
-                    addMessage(`✓ Joined house room`, 'system');
-                    requestDeviceList();
-                    break;
-
-                case 'user_joined':
-                    state.sessions.set(message.sessionId, {
-                        userId: message.userId,
-                        clientType: message.clientType
-                    });
-                    addMessage(`👤 ${message.clientType === 'device' ? '📱 Device' : 'User'} joined (ID: ${message.userId})`, 'system');
-                    break;
-
-                case 'user_left':
-                    state.sessions.delete(message.sessionId);
-                    addMessage(`👤 User/Device left (ID: ${message.userId})`, 'system');
-                    break;
-
-                case 'get_devices':
-                    if (message.devices) {
-                        state.devices.clear();
-                        message.devices.forEach(d => state.devices.set(d.id, d));
-                        renderDevices();
-                        addMessage(`✓ Loaded ${message.devices.length} device(s)`, 'system');
-                    }
-                    break;
-
-                case 'device_update':
-                    const device = state.devices.get(message.deviceId);
-                    if (device) {
-                        device.status = message.status;
-                        device.lastUpdate = message.timestamp;
-                        renderDevices();
-                        addMessage(`📊 ${message.deviceName || 'Device'}: ${message.status}`, 'info');
-                    }
-                    break;
-
-                case 'command_routed':
-                    addMessage(`✓ Command sent to ${message.deviceName || 'device'}`, 'system');
-                    break;
-
-                case 'error':
-                    addMessage(`✗ Error: ${message.message}`, 'error');
-                    break;
-
-                default:
-                    console.log('Unknown message type:', message.type);
-            }
-        }
-
-        function requestDeviceList() {
-            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-                state.ws.send(JSON.stringify({
-                    type: 'get_devices'
-                }));
-            }
-        }
-
-        // ============= DEVICE MANAGEMENT =============
-        function renderDevices() {
-            const container = document.getElementById('devicesContainer');
-
-            if (state.devices.size === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <h2>No Devices</h2>
-                        <p>No devices connected to this house yet.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            let html = '<div class="devices-grid">';
-
-            state.devices.forEach((device, id) => {
-                const isOnline = device.status === 'online' || device.status === 'active';
-                html += `
-                    <div class="device-card">
-                        <div class="device-header">
-                            <div class="device-info">
-                                <h3>${escapeHtml(device.device_name || `Device ${id}`)}</h3>
-                                <div class="device-type">${escapeHtml(device.device_type || 'Unknown')}</div>
-                            </div>
-                            <span class="device-status ${isOnline ? 'online' : 'offline'}">
-                                ${isOnline ? '🟢 Online' : '🔴 Offline'}
-                            </span>
-                        </div>
-
-                        <div class="device-body">
-                            <div class="device-prop">
-                                <strong>Device ID:</strong>
-                                <span>${device.id}</span>
-                            </div>
-                            <div class="device-prop">
-                                <strong>Status:</strong>
-                                <span>${escapeHtml(device.status || 'Unknown')}</span>
-                            </div>
-                            <div class="device-prop">
-                                <strong>Last Update:</strong>
-                                <span>${device.lastUpdate ? new Date(device.lastUpdate).toLocaleTimeString() : 'Never'}</span>
-                            </div>
-                        </div>
-
-                        <div class="device-actions">
-                            <button class="device-btn" onclick="sendCommand(${id}, 'on')">Turn ON</button>
-                            <button class="device-btn danger" onclick="sendCommand(${id}, 'off')">Turn OFF</button>
-                        </div>
-                    </div>
-                `;
-            });
-
-            html += '</div>';
-            container.innerHTML = html;
-        }
-
-        function sendCommand(deviceId, command) {
-            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-                const device = state.devices.get(deviceId);
-                state.ws.send(JSON.stringify({
-                    type: 'device_command',
-                    deviceId: deviceId,
-                    command: command,
-                    timestamp: new Date().toISOString()
-                }));
-                addMessage(`📤 Sent '${command}' command to ${device?.device_name || 'device'}`, 'info');
-            }
-        }
-
-        // ============= LOGOUT =============
-        function handleLogout() {
-            if (state.ws) {
-                state.ws.close();
-            }
-
-            state = {
-                jwt: null,
-                userId: null,
-                userName: null,
-                houseId: 1,
-                sessionId: null,
-                ws: null,
-                devices: new Map(),
-                sessions: new Map()
-            };
-
-            document.getElementById('loginScreen').style.display = 'flex';
-            document.getElementById('dashboardScreen').style.display = 'none';
-            document.getElementById('email').value = 'admin@example.com';
-            document.getElementById('password').value = 'AdminPass123!';
-            document.getElementById('loginError').classList.remove('show');
-
-            addMessage('Logged out', 'system');
-        }
-
-        // ============= INITIAL SETUP =============
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('email').focus();
+      try {
+        const loginResponse = await requestJson(`${API_BASE}/api/login`, {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
         });
 
-        // Auto-login for testing
-        // Uncomment to auto-login:
-        // setTimeout(() => handleLogin(), 500);
-    </script>
+        state.jwt = loginResponse.accessToken;
+        const meResponse = await fetch(`${API_BASE}/api/me`, {
+          method: 'GET',
+          headers: getAuthHeaders()
+        });
+
+        const meData = meResponse.ok ? await meResponse.json() : null;
+        if (!meData || !meData.user) {
+          throw new Error('Could not load user profile');
+        }
+
+        state.profile = meData.user;
+        state.role = String(meData.user.role || 'user').toLowerCase();
+        userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
+        userRole.textContent = formatRole(state.role);
+
+        setActiveScreen('dashboard');
+        clearAlert(passwordAlert);
+        await loadDashboardData();
+      } catch (error) {
+        showAlert(loginAlert, error.message || 'Login failed.', 'error');
+      } finally {
+        loginBtn.disabled = false;
+      }
+    }
+
+    async function handleLogout() {
+      state.jwt = '';
+      state.profile = null;
+      state.role = null;
+      state.houses = [];
+      state.tenants = [];
+      state.devices = [];
+      state.selectedHouseId = null;
+      document.getElementById('email').value = 'admin@example.com';
+      document.getElementById('password').value = 'AdminPass123!';
+      clearAlert(loginAlert);
+      clearAlert(passwordAlert);
+      setActiveScreen('login');
+    }
+
+    async function handlePasswordUpdate(event) {
+      event.preventDefault();
+      const oldPassword = document.getElementById('oldPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+
+      if (!oldPassword || !newPassword) {
+        showAlert(passwordAlert, 'Both current and new password are required.', 'error');
+        return;
+      }
+
+      try {
+        const result = await requestJson(`${API_BASE}/api/update_password`, {
+          method: 'POST',
+          body: JSON.stringify({
+            token: state.jwt,
+            oldPassword,
+            newPassword
+          })
+        });
+
+        showAlert(passwordAlert, result.message || 'Password updated successfully.', 'success');
+        document.getElementById('oldPassword').value = '';
+        document.getElementById('newPassword').value = '';
+      } catch (error) {
+        showAlert(passwordAlert, error.message || 'Password update failed.', 'error');
+      }
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+    document.getElementById('refreshBtn').addEventListener('click', async () => {
+      state.devices = [];
+      state.tenants = [];
+      await loadDashboardData();
+    });
+    document.getElementById('passwordForm').addEventListener('submit', handlePasswordUpdate);
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && loginScreen.classList.contains('active')) {
+        handleLogin();
+      }
+    });
+  </script>
 </body>
 </html>

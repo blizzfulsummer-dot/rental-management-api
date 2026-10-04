@@ -112,42 +112,32 @@ export async function issueWebSocketTicket(request, env) {
       return json({ error: 'User not found' }, 404);
     }
 
-    // Check if user can access this house
-    // PLACEHOLDER: Adjust query based on your actual permission model
-    // This example checks if:
-    // 1. User is an admin (can access any house), OR
-    // 2. User has explicit access to the house in user_house_access table
+    // Check if user can access this specific house.
     let hasAccess = false;
-    let userRole = 'user';
+    let userRole = user.role;
 
     if (user.role === 'admin') {
       hasAccess = true;
       userRole = 'admin';
     } else {
-      const permission = await env.DB
-        .prepare('SELECT access_level FROM user_house_access WHERE user_id = ? AND house_id = ?')
-        .bind(userId, houseId)
+      const ownedHouse = await env.DB
+        .prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?')
+        .bind(houseId, userId)
         .first();
 
-      if (permission) {
+      if (ownedHouse) {
         hasAccess = true;
-        userRole = permission.access_level;
-      }
-    }
+        userRole = 'owner';
+      } else {
+        const permission = await env.DB
+          .prepare('SELECT access_level FROM user_house_access WHERE user_id = ? AND house_id = ?')
+          .bind(userId, houseId)
+          .first();
 
-    // PLACEHOLDER: Adjust based on your permission model
-    // Example: Tenants automatically have access to their own house
-    if (!hasAccess && user.role === 'tenant') {
-      const tenant = await env.DB
-        .prepare('SELECT id FROM tenants WHERE user_id = ? LIMIT 1')
-        .bind(userId)
-        .first();
-
-      if (tenant) {
-        // In your schema, you'd have house_id linked to tenants
-        // For now, this is a placeholder
-        hasAccess = true;
-        userRole = 'tenant';
+        if (permission) {
+          hasAccess = true;
+          userRole = permission.access_level || user.role;
+        }
       }
     }
 
@@ -252,15 +242,16 @@ export async function validateWebSocketTicket(env, ticketId, houseId) {
       return { valid: false, error: 'Ticket expired' };
     }
 
-    // Mark ticket as consumed (single-use)
-    try {
-      await env.DB
-        .prepare('UPDATE websocket_tickets SET consumed = 1 WHERE ticket_id = ?')
-        .bind(ticketId)
-        .run();
-    } catch (error) {
-      console.error('Failed to mark ticket as consumed:', error);
-      // Continue anyway - ticket is single-use semantically
+    // Mark ticket as consumed atomically (single-use). This prevents
+    // concurrent requests from reusing the same ticket before the first one completes.
+    const consumeResult = await env.DB
+      .prepare('UPDATE websocket_tickets SET consumed = 1 WHERE ticket_id = ? AND consumed = 0 AND expires_at > ?')
+      .bind(ticketId, new Date().toISOString())
+      .run();
+
+    if (consumeResult.meta?.changes !== 1) {
+      console.warn(`[WebSocket] Ticket could not be consumed atomically: ${ticketId}`);
+      return { valid: false, error: 'Ticket already used or expired' };
     }
 
     // Get user details

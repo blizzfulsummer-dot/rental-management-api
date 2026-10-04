@@ -76,7 +76,7 @@ export function validateSignupPayload(payload) {
   if (!emailResult.ok) errors.push('email');
 
   const role = typeof payload.role === 'string' ? payload.role.trim().toLowerCase() : '';
-  if (!['admin', 'tenant', 'user'].includes(role)) {
+  if (!['admin', 'owner', 'tenant', 'user'].includes(role)) {
     errors.push('role');
   }
 

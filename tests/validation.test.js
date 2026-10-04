@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateEmail, validatePassword, validateTenantPayload } from '../src/lib/validation.js';
+import { validateEmail, validatePassword, validateTenantPayload, validateSignupPayload } from '../src/lib/validation.js';
 
 test('validateEmail accepts common addresses', () => {
   assert.equal(validateEmail('user@example.com').ok, true);
@@ -10,6 +10,17 @@ test('validateEmail accepts common addresses', () => {
 test('validatePassword enforces minimum strength', () => {
   assert.equal(validatePassword('weak').ok, false);
   assert.equal(validatePassword('StrongPass1!').ok, true);
+});
+
+test('validateSignupPayload accepts owner role', () => {
+  const result = validateSignupPayload({
+    email: 'owner@example.com',
+    role: 'owner',
+    password: 'StrongPass1!'
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
 });
 
 test('validateTenantPayload rejects missing tenant fields', () => {

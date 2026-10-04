@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getTenant, updateTenant } from '../src/tenant.js';
+import { createDevice, createHouse, getTenant, listHouseDevices, listHouses, listTenants, updateTenant } from '../src/tenant.js';
 
 async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -40,6 +40,14 @@ async function createDb() {
           bind(...args) {
             return {
               async first() {
+                if (sql.includes('FROM user_house_access') && sql.includes('JOIN houses')) {
+                  return { user_id: 42, house_id: 10 };
+                }
+
+                if (sql.includes('FROM houses WHERE id = ? AND owner_id = ?')) {
+                  return { id: 10, owner_id: 1 };
+                }
+
                 if (sql.includes('FROM tenants') && sql.includes('JOIN users')) {
                   return { ...tenantRow, ...userRow };
                 }
@@ -57,6 +65,13 @@ async function createDb() {
                 }
 
                 return tenantRow;
+              },
+              async all() {
+                if (sql.includes('SELECT DISTINCT') && sql.includes('FROM tenants')) {
+                  return { results: [{ ...tenantRow, email: userRow.email, name: userRow.name, role: userRow.role }] };
+                }
+
+                return { results: [] };
               },
               async run() {
                 return { success: true };
@@ -93,4 +108,23 @@ test('tenant can update their own password via tenant endpoint', async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.success, true);
+});
+
+test('owner can list tenants assigned to their houses', async () => {
+  const { db } = await createDb();
+  const response = await listTenants({}, { DB: db }, { id: 1, role: 'owner' });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.tenants.length, 1);
+  assert.equal(payload.tenants[0].email, 'tenant@example.com');
+});
+
+test('admin can fetch an empty device list for an existing house', async () => {
+  const { db } = await createDb();
+  const response = await listHouseDevices({}, { DB: db }, { id: 1, role: 'admin' }, '10');
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload.devices, []);
 });
