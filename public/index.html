@@ -333,6 +333,31 @@
       margin-top: 12px;
     }
 
+    .view-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 20px 0 18px;
+    }
+
+    .view-tab {
+      border: 1px solid var(--border);
+      background: #f8faff;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .view-tab.active {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 10px 18px rgba(59,130,246,0.18);
+    }
+
     .empty {
       border: 1px dashed var(--border);
       border-radius: 16px;
@@ -346,6 +371,7 @@
       .layout { grid-template-columns: 1fr; }
       .dashboard { padding: 0 10px 24px; }
       .topbar { flex-direction: column; align-items: flex-start; }
+      .view-tabs { margin-top: 10px; }
     }
   </style>
 </head>
@@ -385,6 +411,8 @@
 
     <div class="dashboard">
       <div id="statsGrid" class="stat-grid"></div>
+
+      <div id="viewTabs" class="view-tabs" aria-label="Main navigation"></div>
 
       <div class="layout">
         <section class="panel">
@@ -427,7 +455,8 @@
       tenants: [],
       selectedHouseId: null,
       devices: [],
-      ws: null
+      ws: null,
+      activeView: 'overview'
     };
 
     const loginScreen = document.getElementById('loginScreen');
@@ -440,6 +469,7 @@
     const userDisplayName = document.getElementById('userDisplayName');
     const userRole = document.getElementById('userRole');
     const mainPanelTitle = document.getElementById('mainPanelTitle');
+    const viewTabs = document.getElementById('viewTabs');
 
     function showAlert(element, message, type) {
       element.textContent = message;
@@ -453,6 +483,39 @@
 
     function formatRole(role) {
       return role ? role.toUpperCase() : 'USER';
+    }
+
+    function getRoleViews() {
+      if (state.role === 'admin' || state.role === 'owner') {
+        return ['overview', 'houses', 'tenants', 'devices'];
+      }
+      return ['overview', 'houses', 'devices'];
+    }
+
+    function renderViewTabs() {
+      const views = getRoleViews();
+      const labels = {
+        overview: 'Overview',
+        houses: 'Houses',
+        tenants: 'Tenants',
+        devices: 'Devices'
+      };
+
+      viewTabs.innerHTML = views.map(view => `
+        <button
+          type="button"
+          class="view-tab ${state.activeView === view ? 'active' : ''}"
+          data-view="${view}"
+        >${labels[view]}</button>
+      `).join('');
+
+      viewTabs.querySelectorAll('[data-view]').forEach(button => {
+        button.addEventListener('click', () => {
+          state.activeView = button.dataset.view;
+          renderViewTabs();
+          renderMainPanel();
+        });
+      });
     }
 
     function setActiveScreen(screen) {
@@ -554,13 +617,16 @@
         button.addEventListener('click', () => {
           const houseId = Number(button.dataset.houseId);
           state.selectedHouseId = houseId;
-          renderDeviceList();
+          state.activeView = 'devices';
+          renderViewTabs();
+          renderMainPanel();
         });
       });
     }
 
     function renderTenantList() {
       if (!state.tenants.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No tenants assigned to this account scope.</div>';
         return;
       }
 
@@ -572,10 +638,7 @@
         </div>
       `).join('');
 
-      const panel = document.createElement('div');
-      panel.className = 'card-grid';
-      panel.innerHTML = html;
-      mainPanelContent.appendChild(panel);
+      mainPanelContent.innerHTML = `<div class="card-grid">${html}</div>`;
     }
 
     function renderDeviceList() {
@@ -603,42 +666,82 @@
       mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
     }
 
+    function renderOverviewPanel() {
+      const role = state.role;
+      mainPanelTitle.textContent = role === 'admin' ? 'Admin Overview' : role === 'owner' ? 'Owner Overview' : 'Assigned Access';
+
+      if (role === 'admin' || role === 'owner') {
+        renderHouseList();
+        if (state.tenants.length) {
+          const panel = document.createElement('div');
+          panel.className = 'card-grid';
+          panel.innerHTML = state.tenants.map(tenant => `
+            <div class="tenant-card">
+              <h3>${tenant.name || tenant.email || 'Tenant'}</h3>
+              <div class="meta">${tenant.email || 'No email'}<br />Unit: ${tenant.leased_unit || 'N/A'}<br />Rent: ${tenant.rent_amount || 'N/A'}</div>
+              <div class="tag">Tenant</div>
+            </div>
+          `).join('');
+          mainPanelContent.appendChild(panel);
+        }
+        return;
+      }
+
+      if (!state.houses.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No house assignment found for this account.</div>';
+        return;
+      }
+
+      const cards = state.houses.map(house => `
+        <div class="house-card">
+          <div class="tag">House</div>
+          <h3>${house.name || 'Assigned House'}</h3>
+          <div class="meta">${house.location || 'No location'}<br />Owner: ${house.owner_id || 'N/A'}</div>
+          <div class="inline-actions">
+            <button class="mini-btn" data-house-id="${house.id}" data-action="select-house">View Devices</button>
+          </div>
+        </div>
+      `).join('');
+
+      mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
+      document.querySelectorAll('[data-action="select-house"]').forEach(button => {
+        button.addEventListener('click', () => {
+          const houseId = Number(button.dataset.houseId);
+          state.selectedHouseId = houseId;
+          state.activeView = 'devices';
+          renderViewTabs();
+          renderMainPanel();
+        });
+      });
+    }
+
     function renderMainPanel() {
       const role = state.role;
       mainPanelContent.innerHTML = '';
 
-      if (role === 'admin' || role === 'owner') {
-        mainPanelTitle.textContent = role === 'admin' ? 'Admin Overview' : 'Owner Overview';
+      if (!state.activeView || !getRoleViews().includes(state.activeView)) {
+        state.activeView = 'overview';
+      }
+
+      if (state.activeView === 'houses') {
+        mainPanelTitle.textContent = role === 'admin' ? 'All Houses' : role === 'owner' ? 'My Houses' : 'Assigned Houses';
         renderHouseList();
+        return;
+      }
+
+      if (state.activeView === 'tenants') {
+        mainPanelTitle.textContent = 'Tenants';
         renderTenantList();
         return;
       }
 
-      mainPanelTitle.textContent = 'Assigned Access';
-      const houseList = state.houses.length ? state.houses : [];
-      if (houseList.length) {
-        const cards = houseList.map(house => `
-          <div class="house-card">
-            <div class="tag">House</div>
-            <h3>${house.name || 'Assigned House'}</h3>
-            <div class="meta">${house.location || 'No location'}<br />Owner: ${house.owner_id || 'N/A'}</div>
-            <div class="inline-actions">
-              <button class="mini-btn" data-house-id="${house.id}" data-action="select-house">View Devices</button>
-            </div>
-          </div>
-        `).join('');
-        mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
-
-        document.querySelectorAll('[data-action="select-house"]').forEach(button => {
-          button.addEventListener('click', () => {
-            const houseId = Number(button.dataset.houseId);
-            state.selectedHouseId = houseId;
-            renderDeviceList();
-          });
-        });
-      } else {
-        mainPanelContent.innerHTML = '<div class="empty">No house assignment found for this account.</div>';
+      if (state.activeView === 'devices') {
+        mainPanelTitle.textContent = 'Devices';
+        renderDeviceList();
+        return;
       }
+
+      renderOverviewPanel();
     }
 
     async function loadDashboardData() {
@@ -670,6 +773,7 @@
 
         renderStats();
         renderProfile();
+        renderViewTabs();
         renderMainPanel();
       } catch (error) {
         console.error('Dashboard load error:', error);
@@ -709,9 +813,11 @@
 
         state.profile = meData.user;
         state.role = String(meData.user.role || 'user').toLowerCase();
+        state.activeView = 'overview';
         userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
         userRole.textContent = formatRole(state.role);
 
+        renderViewTabs();
         setActiveScreen('dashboard');
         clearAlert(passwordAlert);
         await loadDashboardData();
@@ -730,6 +836,7 @@
       state.tenants = [];
       state.devices = [];
       state.selectedHouseId = null;
+      state.activeView = 'overview';
       document.getElementById('email').value = 'admin@example.com';
       document.getElementById('password').value = 'AdminPass123!';
       clearAlert(loginAlert);

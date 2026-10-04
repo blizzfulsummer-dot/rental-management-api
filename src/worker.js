@@ -223,7 +223,6 @@ export default {
   <title>Rental Management Portal</title>
   <style>
     :root {
-      --bg: #eef4ff;
       --panel: #ffffff;
       --primary: #3b82f6;
       --primary-dark: #1d4ed8;
@@ -243,7 +242,7 @@ export default {
     h1, h2, p { margin-top: 0; }
     .subtle { color: var(--muted); margin-bottom: 26px; line-height: 1.5; }
     .field { margin-bottom: 16px; }
-    .field label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--text); }
+    .field label { display: block; margin-bottom: 8px; font-weight: 600; }
     .field input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: #fff; color: var(--text); }
     .field input:focus { outline: 2px solid rgba(59,130,246,0.25); border-color: var(--primary); }
     .primary-btn, .ghost-btn, .secondary-btn { border: none; border-radius: 12px; padding: 12px 16px; font-weight: 700; cursor: pointer; }
@@ -263,6 +262,9 @@ export default {
     .stat-card { background: var(--panel); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 20px; }
     .stat-label { color: var(--muted); font-size: 13px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
     .stat-value { font-size: clamp(1.7rem, 2vw, 2.3rem); font-weight: 800; line-height: 1; }
+    .view-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 18px; }
+    .view-tab { border: 1px solid var(--border); background: #f8faff; color: var(--text); border-radius: 999px; padding: 9px 14px; font-weight: 700; cursor: pointer; }
+    .view-tab.active { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; border-color: transparent; }
     .layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 22px; align-items: start; }
     .panel { background: var(--panel); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
     .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
@@ -305,6 +307,7 @@ export default {
     </header>
     <div class="dashboard">
       <div id="statsGrid" class="stat-grid"></div>
+      <div id="viewTabs" class="view-tabs" aria-label="Main navigation"></div>
       <div class="layout">
         <section class="panel">
           <div class="panel-header">
@@ -330,7 +333,7 @@ export default {
 
   <script>
     const API_BASE = window.location.origin || 'http://localhost:8787';
-    const state = { jwt: '', profile: null, role: null, houses: [], tenants: [], devices: [], selectedHouseId: null };
+    const state = { jwt: '', profile: null, role: null, houses: [], tenants: [], devices: [], selectedHouseId: null, activeView: 'overview' };
     const loginScreen = document.getElementById('loginScreen');
     const dashboardScreen = document.getElementById('dashboardScreen');
     const loginAlert = document.getElementById('loginAlert');
@@ -341,14 +344,34 @@ export default {
     const userDisplayName = document.getElementById('userDisplayName');
     const userRole = document.getElementById('userRole');
     const mainPanelTitle = document.getElementById('mainPanelTitle');
+    const viewTabs = document.getElementById('viewTabs');
+
     function showAlert(element, message, type) { element.textContent = message; element.className = 'alert ' + type + ' show'; }
     function clearAlert(element) { element.textContent = ''; element.className = 'alert'; }
     function formatRole(role) { return role ? role.toUpperCase() : 'USER'; }
-    function setActiveScreen(screen) {
-      loginScreen.classList.toggle('active', screen === 'login');
-      dashboardScreen.classList.toggle('active', screen === 'dashboard');
+    function getRoleViews() {
+      if (state.role === 'admin' || state.role === 'owner') {
+        return ['overview', 'houses', 'tenants', 'devices'];
+      }
+      return ['overview', 'houses', 'devices'];
     }
-    async function requestJson(url, options = {}) {
+    function renderViewTabs() {
+      const views = getRoleViews();
+      const labels = { overview: 'Overview', houses: 'Houses', tenants: 'Tenants', devices: 'Devices' };
+      viewTabs.innerHTML = views.map(function(view) {
+        return '<button type="button" class="view-tab ' + (state.activeView === view ? 'active' : '') + '" data-view="' + view + '">' + labels[view] + '</button>';
+      }).join('');
+      viewTabs.querySelectorAll('[data-view]').forEach(function(button) {
+        button.addEventListener('click', function() {
+          state.activeView = button.dataset.view;
+          renderViewTabs();
+          renderMainPanel();
+        });
+      });
+    }
+    function setActiveScreen(screen) { loginScreen.classList.toggle('active', screen === 'login'); dashboardScreen.classList.toggle('active', screen === 'dashboard'); }
+    async function requestJson(url, options) {
+      options = options || {};
       const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
       const text = await response.text();
       const data = text ? JSON.parse(text) : {};
@@ -358,16 +381,18 @@ export default {
     function getAuthHeaders() { return { Authorization: 'Bearer ' + state.jwt, 'Content-Type': 'application/json' }; }
     function renderStats() {
       const role = state.role;
-      const cards = (role === 'tenant' || role === 'user') ? [
-          { label: 'Assigned House', value: state.houses.length || 0 },
-          { label: 'Devices', value: state.devices.length },
-          { label: 'Role', value: formatRole(role).slice(0, 6) }
-        ] : [
-          { label: 'Houses', value: state.houses.length },
-          { label: 'Tenants', value: state.tenants.length },
-          { label: 'Assigned Devices', value: state.devices.length }
-        ];
-      statsGrid.innerHTML = cards.map(card => '<div class="stat-card"><div class="stat-label">' + card.label + '</div><div class="stat-value">' + card.value + '</div></div>').join('');
+      const cards = (role === 'tenant' || role === 'user')
+        ? [
+            { label: 'Assigned House', value: state.houses.length || 0 },
+            { label: 'Devices', value: state.devices.length },
+            { label: 'Role', value: formatRole(role).slice(0, 6) }
+          ]
+        : [
+            { label: 'Houses', value: state.houses.length },
+            { label: 'Tenants', value: state.tenants.length },
+            { label: 'Assigned Devices', value: state.devices.length }
+          ];
+      statsGrid.innerHTML = cards.map(function(card) { return '<div class="stat-card"><div class="stat-label">' + card.label + '</div><div class="stat-value">' + card.value + '</div></div>'; }).join('');
     }
     function renderProfile() {
       const profile = state.profile || {};
@@ -379,65 +404,126 @@ export default {
         ['House', assignedHouse ? assignedHouse.name : 'No assigned house'],
         ['Location', assignedHouse ? (assignedHouse.location || 'N/A') : 'N/A']
       ];
-      profilePanel.innerHTML = values.map(([label, value]) => '<div class="profile-line"><span class="label">' + label + '</span><strong>' + value + '</strong></div>').join('');
+      profilePanel.innerHTML = values.map(function(pair) { return '<div class="profile-line"><span class="label">' + pair[0] + '</span><strong>' + pair[1] + '</strong></div>'; }).join('');
     }
     function renderHouseList() {
-      if (!state.houses.length) { mainPanelContent.innerHTML = '<div class="empty">No houses available for this account.</div>'; return; }
-      const html = state.houses.map(house => '<div class="house-card"><div class="tag">House</div><h3>' + (house.name || 'Unnamed House') + '</h3><div class="meta">' + (house.location || 'No location') + '<br />Owner ID: ' + (house.owner_id || 'N/A') + '</div><div class="inline-actions"><button class="mini-btn" data-house-id="' + house.id + '" data-action="select-house">View Devices</button></div></div>').join('');
+      if (!state.houses.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No houses available for this account.</div>';
+        return;
+      }
+      const html = state.houses.map(function(house) {
+        return '<div class="house-card"><div class="tag">House</div><h3>' + (house.name || 'Unnamed House') + '</h3><div class="meta">' + (house.location || 'No location') + '<br />Owner ID: ' + (house.owner_id || 'N/A') + '</div><div class="inline-actions"><button class="mini-btn" data-house-id="' + house.id + '" data-action="select-house">View Devices</button></div></div>';
+      }).join('');
       mainPanelContent.innerHTML = '<div class="card-grid">' + html + '</div>';
-      document.querySelectorAll('[data-action="select-house"]').forEach(btn => {
-        btn.addEventListener('click', () => { state.selectedHouseId = Number(btn.dataset.houseId); renderDeviceList(); });
+      document.querySelectorAll('[data-action="select-house"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          state.selectedHouseId = Number(btn.dataset.houseId);
+          state.activeView = 'devices';
+          renderViewTabs();
+          renderMainPanel();
+        });
       });
+    }
+    function renderTenantList() {
+      if (!state.tenants.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No tenants assigned to this account scope.</div>';
+        return;
+      }
+      const html = state.tenants.map(function(tenant) {
+        return '<div class="tenant-card"><h3>' + (tenant.name || tenant.email || 'Tenant') + '</h3><div class="meta">' + (tenant.email || 'No email') + '<br />Unit: ' + (tenant.leased_unit || 'N/A') + '<br />Rent: ' + (tenant.rent_amount || 'N/A') + '</div><div class="tag">Tenant</div></div>';
+      }).join('');
+      mainPanelContent.innerHTML = '<div class="card-grid">' + html + '</div>';
     }
     function renderDeviceList() {
       const selectedHouseId = state.selectedHouseId || (state.houses[0] && state.houses[0].id);
-      const visibleDevices = state.devices.filter(device => !selectedHouseId || Number(device.house_id) === Number(selectedHouseId));
+      const visibleDevices = state.devices.filter(function(device) {
+        return !selectedHouseId || Number(device.house_id) === Number(selectedHouseId);
+      });
       if (!visibleDevices.length) {
         mainPanelContent.innerHTML = '<div class="empty">No devices available for the selected house.</div>';
         return;
       }
-      const html = visibleDevices.map(device => '<div class="device-card"><h3>' + (device.device_name || 'Device ' + device.id) + '</h3><div class="meta">Type: ' + (device.device_type || 'Unknown') + '<br />House ID: ' + (device.house_id || 'N/A') + '</div><span class="device-status ' + ((device.status === 'online' || device.status === 'active') ? 'online' : 'offline') + '">' + (device.status || 'offline') + '</span></div>').join('');
+      const html = visibleDevices.map(function(device) {
+        return '<div class="device-card"><h3>' + (device.device_name || 'Device ' + device.id) + '</h3><div class="meta">Type: ' + (device.device_type || 'Unknown') + '<br />House ID: ' + (device.house_id || 'N/A') + '</div><span class="device-status ' + ((device.status === 'online' || device.status === 'active') ? 'online' : 'offline') + '">' + (device.status || 'offline') + '</span></div>';
+      }).join('');
       mainPanelContent.innerHTML = '<div class="card-grid">' + html + '</div>';
+    }
+    function renderOverviewPanel() {
+      const role = state.role;
+      mainPanelTitle.textContent = role === 'admin' ? 'Admin Overview' : role === 'owner' ? 'Owner Overview' : 'Assigned Access';
+      if (role === 'admin' || role === 'owner') {
+        renderHouseList();
+        if (state.tenants.length) {
+          const panel = document.createElement('div');
+          panel.className = 'card-grid';
+          panel.innerHTML = state.tenants.map(function(tenant) {
+            return '<div class="tenant-card"><h3>' + (tenant.name || tenant.email || 'Tenant') + '</h3><div class="meta">' + (tenant.email || 'No email') + '<br />Unit: ' + (tenant.leased_unit || 'N/A') + '<br />Rent: ' + (tenant.rent_amount || 'N/A') + '</div><div class="tag">Tenant</div></div>';
+          }).join('');
+          mainPanelContent.appendChild(panel);
+        }
+        return;
+      }
+      if (!state.houses.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No house assignment found for this account.</div>';
+        return;
+      }
+      const cards = state.houses.map(function(house) {
+        return '<div class="house-card"><div class="tag">House</div><h3>' + (house.name || 'Assigned House') + '</h3><div class="meta">' + (house.location || 'No location') + '<br />Owner: ' + (house.owner_id || 'N/A') + '</div><div class="inline-actions"><button class="mini-btn" data-house-id="' + house.id + '" data-action="select-house">View Devices</button></div></div>';
+      }).join('');
+      mainPanelContent.innerHTML = '<div class="card-grid">' + cards + '</div>';
+      document.querySelectorAll('[data-action="select-house"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          state.selectedHouseId = Number(btn.dataset.houseId);
+          state.activeView = 'devices';
+          renderViewTabs();
+          renderMainPanel();
+        });
+      });
     }
     function renderMainPanel() {
       mainPanelContent.innerHTML = '';
-      if (state.role === 'admin' || state.role === 'owner') {
-        mainPanelTitle.textContent = state.role === 'admin' ? 'Admin Overview' : 'Owner Overview';
+      if (!state.activeView || !getRoleViews().includes(state.activeView)) {
+        state.activeView = 'overview';
+      }
+      if (state.activeView === 'houses') {
+        mainPanelTitle.textContent = state.role === 'admin' ? 'All Houses' : state.role === 'owner' ? 'My Houses' : 'Assigned Houses';
         renderHouseList();
         return;
       }
-      mainPanelTitle.textContent = 'Assigned Access';
-      const houseList = state.houses.length ? state.houses : [];
-      if (houseList.length) {
-        const html = houseList.map(house => '<div class="house-card"><div class="tag">House</div><h3>' + (house.name || 'Assigned House') + '</h3><div class="meta">' + (house.location || 'No location') + '<br />Owner: ' + (house.owner_id || 'N/A') + '</div><div class="inline-actions"><button class="mini-btn" data-house-id="' + house.id + '" data-action="select-house">View Devices</button></div></div>').join('');
-        mainPanelContent.innerHTML = '<div class="card-grid">' + html + '</div>';
-        document.querySelectorAll('[data-action="select-house"]').forEach(btn => {
-          btn.addEventListener('click', () => { state.selectedHouseId = Number(btn.dataset.houseId); renderDeviceList(); });
-        });
-      } else {
-        mainPanelContent.innerHTML = '<div class="empty">No house assignment found for this account.</div>';
+      if (state.activeView === 'tenants') {
+        mainPanelTitle.textContent = 'Tenants';
+        renderTenantList();
+        return;
       }
+      if (state.activeView === 'devices') {
+        mainPanelTitle.textContent = 'Devices';
+        renderDeviceList();
+        return;
+      }
+      renderOverviewPanel();
     }
     async function loadDashboardData() {
+      const headers = getAuthHeaders();
+      state.devices = [];
+      state.tenants = [];
       try {
-        const headers = getAuthHeaders();
-        const housesResponse = await fetch(API_BASE + '/api/houses', { headers });
+        const housesResponse = await fetch(API_BASE + '/api/houses', { headers: headers });
         const housesData = await housesResponse.json();
         state.houses = Array.isArray(housesData.houses) ? housesData.houses : (Array.isArray(housesData) ? housesData : []);
         if (state.role === 'admin' || state.role === 'owner') {
-          const tenantsResponse = await fetch(API_BASE + '/api/tenants', { headers });
+          const tenantsResponse = await fetch(API_BASE + '/api/tenants', { headers: headers });
           const tenantsData = await tenantsResponse.json();
           state.tenants = Array.isArray(tenantsData.tenants) ? tenantsData.tenants : [];
         }
-        state.devices = [];
         for (const house of state.houses) {
-          const devicesResponse = await fetch(API_BASE + '/api/houses/' + house.id + '/devices', { headers });
+          const devicesResponse = await fetch(API_BASE + '/api/houses/' + house.id + '/devices', { headers: headers });
           const devicesData = await devicesResponse.json();
           const devices = Array.isArray(devicesData.devices) ? devicesData.devices : [];
           state.devices = state.devices.concat(devices);
         }
         renderStats();
         renderProfile();
+        renderViewTabs();
         renderMainPanel();
       } catch (error) {
         console.error('Dashboard load error:', error);
@@ -449,15 +535,17 @@ export default {
       const password = document.getElementById('password').value;
       if (!email || !password) { showAlert(loginAlert, 'Email and password are required.', 'error'); return; }
       try {
-        const loginResponse = await requestJson(API_BASE + '/api/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+        const loginResponse = await requestJson(API_BASE + '/api/login', { method: 'POST', body: JSON.stringify({ email: email, password: password }) });
         state.jwt = loginResponse.accessToken;
         const meResponse = await fetch(API_BASE + '/api/me', { headers: getAuthHeaders() });
         const meData = meResponse.ok ? await meResponse.json() : null;
         if (!meData || !meData.user) throw new Error('Could not load user profile');
         state.profile = meData.user;
         state.role = String(meData.user.role || 'user').toLowerCase();
+        state.activeView = 'overview';
         userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
         userRole.textContent = formatRole(state.role);
+        renderViewTabs();
         setActiveScreen('dashboard');
         clearAlert(passwordAlert);
         await loadDashboardData();
@@ -466,10 +554,19 @@ export default {
       }
     }
     async function handleLogout() {
-      state.jwt = ''; state.profile = null; state.role = null; state.houses = []; state.tenants = []; state.devices = []; state.selectedHouseId = null;
+      state.jwt = '';
+      state.profile = null;
+      state.role = null;
+      state.houses = [];
+      state.tenants = [];
+      state.devices = [];
+      state.selectedHouseId = null;
+      state.activeView = 'overview';
       document.getElementById('email').value = 'admin@example.com';
       document.getElementById('password').value = 'AdminPass123!';
-      clearAlert(loginAlert); clearAlert(passwordAlert); setActiveScreen('login');
+      clearAlert(loginAlert);
+      clearAlert(passwordAlert);
+      setActiveScreen('login');
     }
     async function handlePasswordUpdate(event) {
       event.preventDefault();
@@ -477,7 +574,7 @@ export default {
       const newPassword = document.getElementById('newPassword').value;
       if (!oldPassword || !newPassword) { showAlert(passwordAlert, 'Both current and new password are required.', 'error'); return; }
       try {
-        const result = await requestJson(API_BASE + '/api/update_password', { method: 'POST', body: JSON.stringify({ token: state.jwt, oldPassword, newPassword }) });
+        const result = await requestJson(API_BASE + '/api/update_password', { method: 'POST', body: JSON.stringify({ token: state.jwt, oldPassword: oldPassword, newPassword: newPassword }) });
         showAlert(passwordAlert, result.message || 'Password updated successfully.', 'success');
         document.getElementById('oldPassword').value = '';
         document.getElementById('newPassword').value = '';
@@ -487,7 +584,11 @@ export default {
     }
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-    document.getElementById('refreshBtn').addEventListener('click', loadDashboardData);
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+      state.devices = [];
+      state.tenants = [];
+      loadDashboardData();
+    });
     document.getElementById('passwordForm').addEventListener('submit', handlePasswordUpdate);
     document.addEventListener('keydown', function(event) { if (event.key === 'Enter' && loginScreen.classList.contains('active')) handleLogin(); });
   </script>
