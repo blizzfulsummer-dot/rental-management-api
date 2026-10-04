@@ -227,6 +227,27 @@ export async function resetPassword(request, env) {
   }
 }
 
+async function getAssignedHouses(env, user) {
+  if (user.role === 'admin') {
+    const rows = await env.DB.prepare(`
+      SELECT h.id, h.name, h.location, h.owner_id, h.created_at, h.house_uid
+      FROM houses h
+      ORDER BY h.created_at DESC
+    `).all();
+    return rows.results || [];
+  }
+
+  const rows = await env.DB.prepare(`
+    SELECT DISTINCT h.id, h.name, h.location, h.owner_id, h.created_at, h.house_uid
+    FROM houses h
+    LEFT JOIN user_house_access uha ON uha.house_id = h.id
+    WHERE h.owner_id = ? OR uha.user_id = ?
+    ORDER BY h.created_at DESC
+  `).bind(user.id, user.id).all();
+
+  return rows.results || [];
+}
+
 export async function verifyJwt(request, env) {
   const auth = request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
@@ -244,7 +265,17 @@ export async function verifyJwt(request, env) {
     const user = await env.DB.prepare('SELECT id, email, role, name FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) return json({ error: 'User not found' }, 401);
 
-    return json({ valid: true, user });
+    const assignedHouses = await getAssignedHouses(env, user);
+    const assignedHouse = assignedHouses[0] || null;
+
+    return json({
+      valid: true,
+      user: {
+        ...user,
+        assigned_houses: assignedHouses,
+        assigned_house: assignedHouse
+      }
+    });
   } catch (error) {
     console.error('Verify JWT error:', error);
     return json({ error: 'Invalid or expired token' }, 401);
@@ -287,7 +318,16 @@ export async function getAuthUser(request, env) {
     const user = await env.DB.prepare('SELECT id, email, role, name FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) return { error: 'User not found', status: 404 };
 
-    return { user };
+    const assignedHouses = await getAssignedHouses(env, user);
+    const assignedHouse = assignedHouses[0] || null;
+
+    return {
+      user: {
+        ...user,
+        assigned_houses: assignedHouses,
+        assigned_house: assignedHouse
+      }
+    };
   } catch (error) {
     console.error('Auth user error:', error);
     return { error: 'Authentication failed', status: 500 };

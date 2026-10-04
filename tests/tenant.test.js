@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { SignJWT } from 'jose';
+import { getAuthUser } from '../src/auth.js';
 import { createDevice, createHouse, getTenant, listHouseDevices, listHouses, listTenants, updateTenant } from '../src/tenant.js';
 
 async function hashPassword(password) {
@@ -127,4 +129,49 @@ test('admin can fetch an empty device list for an existing house', async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(payload.devices, []);
+});
+
+test('auth user includes assigned houses from user_house_access', async () => {
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          return {
+            async first() {
+              if (sql.includes('FROM users WHERE id = ?')) {
+                return { id: 42, email: 'tenant@example.com', role: 'tenant', name: 'Tenant User' };
+              }
+              return null;
+            },
+            async all() {
+              if (sql.includes('LEFT JOIN user_house_access')) {
+                return {
+                  results: [
+                    { id: 7, name: 'Main House', location: 'A-12', owner_id: 1, created_at: '2026-01-01T00:00:00Z', house_uid: 'HSE-000007' }
+                  ]
+                };
+              }
+              return { results: [] };
+            }
+          };
+        }
+      };
+    }
+  };
+
+  const token = await new SignJWT({ sub: 42 })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('15m')
+    .sign(new TextEncoder().encode('test-secret'));
+
+  const request = new Request('https://example.com/api/me', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  const result = await getAuthUser(request, { DB: db, JWT_SCRT: 'test-secret' });
+
+  assert.equal(result.user.role, 'tenant');
+  assert.equal(result.user.assigned_house.name, 'Main House');
+  assert.equal(result.user.assigned_houses[0].id, 7);
 });

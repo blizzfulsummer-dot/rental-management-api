@@ -575,8 +575,7 @@
 
     function renderProfile() {
       const profile = state.profile || {};
-      const isTenantUser = ['tenant', 'user'].includes(state.role);
-      const assignedHouse = isTenantUser && state.houses[0] ? state.houses[0] : null;
+      const assignedHouse = profile.assigned_house || profile.assignedHouse || (['tenant', 'user'].includes(state.role) ? state.houses[0] : null) || null;
 
       const values = [
         ['Name', profile.name || 'Not provided'],
