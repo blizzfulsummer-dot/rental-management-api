@@ -87,7 +87,7 @@ curl -X POST https://api.your-domain.com/ws/ticket \
   -d '{
     "houseId": 1,
     "clientType": "web",
-    "deviceId": null
+    "deviceId": 123
   }'
 ```
 
@@ -95,10 +95,15 @@ curl -X POST https://api.your-domain.com/ws/ticket \
 ```json
 {
   "houseId": 1,                    // Required: numeric house ID
-  "clientType": "web",             // Optional: "web" (default) or "device"
-  "deviceId": 123                  // Optional: device ID for IoT clients
+  "clientType": "web",             // "web" or "device" (defaults to "web")
+  "deviceId": 123                  // Required: target device ID for either client
 }
 ```
+
+Web clients are authorized per device. Admins may target any device, owners may
+target devices in their own houses, and tenants/users need a matching
+`user_device_access` row. A ticket is restricted to its one device and cannot
+be used to command another device in the same house.
 
 **Response (200 OK):**
 ```json
@@ -142,7 +147,7 @@ const ticketResponse = await fetch('https://api.your-domain.com/ws/ticket', {
     'Authorization': `Bearer ${jwtToken}`,
     'Content-Type': 'application/json'
   },
-  body: JSON.stringify({ houseId: 1, clientType: 'web' })
+  body: JSON.stringify({ houseId: 1, clientType: 'web', deviceId: 123 })
 });
 
 const { ticket, houseId } = await ticketResponse.json();
@@ -389,9 +394,10 @@ Server confirms command was routed to device:
 
 ```javascript
 class HouseRoomClient {
-  constructor(jwtToken, houseId, onMessage) {
+  constructor(jwtToken, houseId, deviceId, onMessage) {
     this.jwtToken = jwtToken;
     this.houseId = houseId;
+    this.deviceId = deviceId;
     this.onMessage = onMessage;
     this.ws = null;
     this.pingInterval = null;
@@ -405,7 +411,7 @@ class HouseRoomClient {
         'Authorization': `Bearer ${this.jwtToken}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ houseId: this.houseId, clientType: 'web' })
+      body: JSON.stringify({ houseId: this.houseId, deviceId: this.deviceId, clientType: 'web' })
     });
 
     if (!response.ok) {

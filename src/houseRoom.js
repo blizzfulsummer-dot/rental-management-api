@@ -196,12 +196,22 @@ export class HouseRoom {
    * Format: { type: 'device_command', targetDeviceId: 123, command: 'unlock', params: {...} }
    */
   handleDeviceCommand(sessionId, session, message) {
-    const { targetDeviceId, command, params } = message;
+    const targetDeviceId = Number(message.targetDeviceId);
+    const { command, params } = message;
 
-    if (!targetDeviceId || !command) {
+    if (!Number.isInteger(targetDeviceId) || targetDeviceId <= 0 || !command) {
       session.ws.send(JSON.stringify({
         type: 'error',
         error: 'device_command requires targetDeviceId and command',
+        timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+
+    if (targetDeviceId !== session.deviceId) {
+      session.ws.send(JSON.stringify({
+        type: 'error',
+        error: 'This session is not authorized for the requested device',
         timestamp: new Date().toISOString()
       }));
       return;
@@ -223,6 +233,7 @@ export class HouseRoom {
     // Route command to device(s)
     const commandMessage = {
       type: 'device_command',
+      deviceId: targetDeviceId,
       command,
       params: params || {},
       fromUserId: session.userId,

@@ -241,9 +241,16 @@ async function getAssignedHouses(env, user) {
     SELECT DISTINCT h.*
     FROM houses h
     LEFT JOIN user_house_access uha ON uha.house_id = h.id
-    WHERE h.owner_id = ? OR uha.user_id = ?
+    WHERE h.owner_id = ?
+       OR uha.user_id = ?
+       OR EXISTS (
+         SELECT 1
+         FROM devices d
+         JOIN user_device_access uda ON uda.device_id = d.id
+         WHERE d.house_id = h.id AND uda.user_id = ?
+       )
     ORDER BY h.created_at DESC
-  `).bind(user.id, user.id).all();
+  `).bind(user.id, user.id, user.id).all();
 
   return (rows.results || []).map(normalizeHouseLocation);
 }
@@ -323,16 +330,7 @@ export async function getAuthUser(request, env) {
     const user = await env.DB.prepare('SELECT id, email, role, name FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) return { error: 'User not found', status: 404 };
 
-    const assignedHouses = await getAssignedHouses(env, user);
-    const assignedHouse = assignedHouses[0] || null;
-
-    return {
-      user: {
-        ...user,
-        assigned_houses: assignedHouses,
-        assigned_house: assignedHouse
-      }
-    };
+    return { user };
   } catch (error) {
     console.error('Auth user error:', error);
     return { error: 'Authentication failed', status: 500 };

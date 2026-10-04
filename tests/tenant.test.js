@@ -42,6 +42,9 @@ async function createDb() {
           bind(...args) {
             return {
               async first() {
+                if (sql.includes('LEFT JOIN user_device_access')) {
+                  return { 1: 1 };
+                }
                 if (sql.includes('FROM user_house_access') && sql.includes('JOIN houses')) {
                   return { user_id: 42, house_id: 10 };
                 }
@@ -129,6 +132,144 @@ test('admin can fetch an empty device list for an existing house', async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(payload.devices, []);
+});
+
+test('house device list normalizes production name and type columns for the requested house', async () => {
+  let queriedHouseId;
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          if (sql.includes('LEFT JOIN user_device_access')) {
+            return { async first() { return { 1: 1 }; } };
+          }
+
+          if (sql.includes('FROM user_house_access')) {
+            return { async first() { return { id: 1 }; } };
+          }
+
+          if (sql.includes('FROM devices d') || sql.includes('FROM devices WHERE house_id = ?')) {
+            queriedHouseId = args[0];
+            return {
+              async all() {
+                return {
+                  results: [
+                    { id: 12, house_id: 10, name: 'Main Gate', type: 'Timer', status: 'Online', last_seen: '2026-02-26' }
+                  ]
+                };
+              }
+            };
+          }
+
+          return { async first() { return null; }, async all() { return { results: [] }; } };
+        }
+      };
+    }
+  };
+
+  const response = await listHouseDevices({}, { DB: db }, { id: 42, role: 'tenant' }, '10');
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(queriedHouseId, 10);
+  assert.equal(payload.devices[0].house_id, 10);
+  assert.equal(payload.devices[0].device_name, 'Main Gate');
+  assert.equal(payload.devices[0].device_type, 'Timer');
+});
+
+test('admin can create a device using production name and type columns', async () => {
+  let insertSql;
+  let insertValues;
+  const db = {
+    prepare(sql) {
+      const prepared = {
+        async all() {
+          if (sql === 'PRAGMA table_info(devices)') {
+            return {
+              results: ['id', 'house_id', 'name', 'type', 'status', 'created_at'].map(name => ({ name }))
+            };
+          }
+          return { results: [] };
+        },
+        bind(...args) {
+          if (sql === 'PRAGMA table_info(devices)') {
+            return {
+              async all() {
+                return {
+                  results: ['id', 'house_id', 'name', 'type', 'status', 'created_at'].map(name => ({ name }))
+                };
+              }
+            };
+          }
+          if (sql.startsWith('INSERT INTO devices')) {
+            insertSql = sql;
+            insertValues = args;
+            return { async run() { return { meta: { last_row_id: 12 } }; } };
+          }
+          if (sql.includes('SELECT * FROM devices WHERE id = ?')) {
+            return { async first() { return { id: 12, house_id: 10, name: 'Entry Light', type: 'Switch' }; } };
+          }
+          return { async first() { return null; }, async all() { return { results: [] }; } };
+        }
+      };
+      return prepared;
+    }
+  };
+  const request = new Request('https://example.com/api/houses/10/devices', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Entry Light', type: 'Switch', house_id: 10 })
+  });
+
+  const response = await createDevice(request, { DB: db }, { id: 1, role: 'admin' });
+  const payload = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.match(insertSql, /INSERT INTO devices \(house_id, name, type, status, created_at\)/);
+  assert.deepEqual(insertValues.slice(0, 3), [10, 'Entry Light', 'Switch']);
+  assert.equal(payload.device.device_name, 'Entry Light');
+});
+
+test('tenant cannot create devices', async () => {
+  const request = new Request('https://example.com/api/houses/10/devices', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Entry Light', type: 'Switch', house_id: 10 })
+  });
+  const createResponse = await createDevice(request, { DB: {} }, { id: 42, role: 'tenant' });
+
+  assert.equal(createResponse.status, 403);
+});
+
+test('device access also makes the associated house visible to the user', async () => {
+  let boundUserIds;
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          boundUserIds = args;
+          return {
+            async all() {
+              assert.match(sql, /JOIN user_device_access uda ON uda\.device_id = d\.id/);
+              return {
+                results: [
+                  { id: 3, name: 'Device House', address: 'Street 3', owner_id: 1, created_at: '2026-01-01' }
+                ]
+              };
+            }
+          };
+        }
+      };
+    }
+  };
+
+  const response = await listHouses({}, { DB: db }, { id: 42, role: 'tenant' });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(boundUserIds, [42, 42, 42]);
+  assert.equal(payload.houses[0].id, 3);
+  assert.equal(payload.houses[0].location, 'Street 3');
 });
 
 test('profile endpoint includes assigned houses using production address column', async () => {

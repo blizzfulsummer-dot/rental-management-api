@@ -188,7 +188,7 @@ curl -X POST http://localhost:8787/api/login \
 curl -X POST http://localhost:8787/ws/ticket \
   -H "Authorization: Bearer JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"houseId": 1, "clientType": "web"}'
+  -d '{"houseId": 1, "clientType": "web", "deviceId": 1}'
 
 # Store TICKET from response
 ```

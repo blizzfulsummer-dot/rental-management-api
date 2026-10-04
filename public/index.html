@@ -366,6 +366,56 @@
       text-align: center;
       background: rgba(255,255,255,0.4);
     }
+    .house-selector {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .house-selector select {
+      min-width: min(100%, 260px);
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+      color: var(--text);
+      font: inherit;
+    }
+    .device-edit-form {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .device-edit-form input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .house-selector {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .house-selector select {
+      min-width: min(100%, 260px);
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+      color: var(--text);
+      font: inherit;
+    }
 
     @media (max-width: 900px) {
       .layout { grid-template-columns: 1fr; }
@@ -494,6 +544,26 @@
     function clearAlert(element) {
       element.textContent = '';
       element.className = 'alert';
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[character]);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[character]);
     }
 
     function formatRole(role) {
@@ -656,28 +726,185 @@
     }
 
     function renderDeviceList() {
-      const selectedHouseId = state.selectedHouseId || (state.houses[0] && state.houses[0].id);
-      const visibleDevices = state.devices.filter(device => {
-        if (!selectedHouseId) return true;
-        return Number(device.house_id) === Number(selectedHouseId);
-      });
-
-      if (!visibleDevices.length) {
-        mainPanelContent.innerHTML = '<div class="empty">No devices available for the selected house.</div>';
+      if (!state.houses.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No house is assigned to this account, so there are no house devices to show.</div>';
         return;
       }
 
+      const selectedHouse = state.houses.find(house => Number(house.id) === Number(state.selectedHouseId)) || state.houses[0];
+      state.selectedHouseId = Number(selectedHouse.id);
+      const selectedHouseId = selectedHouse.id;
+      const canManageDevices = state.role === 'admin' || state.role === 'owner';
+      const visibleDevices = state.devices.filter(device => {
+        return Number(device.house_id) === Number(selectedHouseId);
+      });
+
       const cards = visibleDevices.map(device => `
         <div class="device-card">
-          <h3>${device.device_name || `Device ${device.id}`}</h3>
-          <div class="meta">Type: ${device.device_type || 'Unknown'}<br />House ID: ${device.house_id || 'N/A'}</div>
-          <span class="device-status ${device.status === 'online' || device.status === 'active' ? 'online' : 'offline'}">
-            ${device.status || 'offline'}
+          <h3>${escapeHtml(device.device_name || `Device ${device.id}`)}</h3>
+          <div class="meta">Type: ${escapeHtml(device.device_type || 'Unknown')}<br />House: ${escapeHtml(selectedHouse.name || `House ${selectedHouse.id}`)}</div>
+          <span class="device-status ${['online', 'active', 'on'].includes(String(device.status || '').toLowerCase()) ? 'online' : 'offline'}">
+            ${escapeHtml(device.status || 'offline')}
           </span>
+          <div class="inline-actions">
+            <button class="mini-btn" type="button" data-device-command="on" data-device-id="${device.id}">Turn on</button>
+            <button class="mini-btn" type="button" data-device-command="off" data-device-id="${device.id}">Turn off</button>
+          </div>
+          ${canManageDevices ? `
+            <form class="device-edit-form" data-device-id="${device.id}">
+              <input name="name" aria-label="Device name" value="${escapeHtml(device.device_name || '')}" required />
+              <input name="type" aria-label="Device type" value="${escapeHtml(device.device_type || '')}" required />
+              <div class="inline-actions">
+                <button class="mini-btn" type="submit">Save</button>
+                <button class="mini-btn" type="button" data-delete-device="${device.id}">Delete</button>
+              </div>
+            </form>
+          ` : ''}
         </div>
       `).join('');
 
-      mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
+      const houseOptions = state.houses.map(house => `
+        <option value="${house.id}" ${Number(house.id) === Number(selectedHouseId) ? 'selected' : ''}>
+          ${escapeHtml(house.name || `House ${house.id}`)}
+        </option>
+      `).join('');
+      const deviceContent = visibleDevices.length
+        ? `<div class="card-grid">${cards}</div>`
+        : '<div class="empty">No devices are associated with this house yet.</div>';
+      const addDeviceForm = canManageDevices ? `
+        <form id="addDeviceForm" class="device-edit-form">
+          <strong>Add a device to ${escapeHtml(selectedHouse.name || `House ${selectedHouse.id}`)}</strong>
+          <input name="name" aria-label="New device name" placeholder="Device name" required />
+          <input name="type" aria-label="New device type" placeholder="Device type (e.g. Switch)" required />
+          <button class="primary-btn" type="submit">Add device</button>
+        </form>
+      ` : '';
+
+      mainPanelContent.innerHTML = `
+        <label class="house-selector" for="deviceHouseSelect">
+          Devices for house
+          <select id="deviceHouseSelect">${houseOptions}</select>
+        </label>
+        <div id="deviceNotice" class="alert"></div>
+        ${addDeviceForm}
+        ${deviceContent}
+      `;
+      document.getElementById('deviceHouseSelect').addEventListener('change', event => {
+        state.selectedHouseId = Number(event.target.value);
+        renderMainPanel();
+      });
+
+      const deviceNotice = document.getElementById('deviceNotice');
+      const refreshDevices = async () => {
+        state.devices = [];
+        await loadDashboardData();
+        state.activeView = 'devices';
+        renderMainPanel();
+      };
+
+      document.getElementById('addDeviceForm')?.addEventListener('submit', async event => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        try {
+          await requestJson(`${API_BASE}/api/houses/${selectedHouseId}/devices`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ name: formData.get('name'), type: formData.get('type') })
+          });
+          await refreshDevices();
+        } catch (error) {
+          showAlert(deviceNotice, error.message || 'Unable to add device.', 'error');
+        }
+      });
+
+      document.querySelectorAll('.device-edit-form[data-device-id]').forEach(form => {
+        form.addEventListener('submit', async event => {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
+          try {
+            await requestJson(`${API_BASE}/api/devices/${form.dataset.deviceId}`, {
+              method: 'PUT',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ name: formData.get('name'), type: formData.get('type') })
+            });
+            await refreshDevices();
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to update device.', 'error');
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-delete-device]').forEach(button => {
+        button.addEventListener('click', async () => {
+          if (!window.confirm('Delete this device?')) return;
+          try {
+            await requestJson(`${API_BASE}/api/devices/${button.dataset.deleteDevice}`, {
+              method: 'DELETE',
+              headers: getAuthHeaders()
+            });
+            await refreshDevices();
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to delete device.', 'error');
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-device-command]').forEach(button => {
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try {
+            const ticketData = await requestJson(`${API_BASE}/ws/ticket`, {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({
+                houseId: Number(selectedHouseId),
+                deviceId: Number(button.dataset.deviceId),
+                clientType: 'web'
+              })
+            });
+            const socket = new WebSocket(`${WS_BASE}/ws/house/${selectedHouseId}?ticket=${encodeURIComponent(ticketData.ticket)}`);
+            await new Promise((resolve, reject) => {
+              const timeout = window.setTimeout(() => {
+                socket.close();
+                reject(new Error('Device did not acknowledge the command in time.'));
+              }, 10000);
+              socket.addEventListener('open', () => {
+                socket.send(JSON.stringify({
+                  type: 'device_command',
+                  targetDeviceId: Number(button.dataset.deviceId),
+                  command: button.dataset.deviceCommand
+                }));
+              }, { once: true });
+              socket.addEventListener('message', event => {
+                let message;
+                try {
+                  message = JSON.parse(event.data);
+                } catch {
+                  return;
+                }
+                if (message.type === 'command_routed') {
+                  window.clearTimeout(timeout);
+                  socket.close();
+                  resolve();
+                } else if (message.type === 'error') {
+                  window.clearTimeout(timeout);
+                  socket.close();
+                  reject(new Error(message.error || 'Device command failed.'));
+                }
+              });
+              socket.addEventListener('error', () => {
+                window.clearTimeout(timeout);
+                reject(new Error('Could not connect to the device control channel.'));
+              }, { once: true });
+            });
+            showAlert(deviceNotice, 'Command sent to the device.', 'success');
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to control device.', 'error');
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
     }
 
     function renderOverviewPanel() {
@@ -780,6 +1007,9 @@
           for (const house of state.houses) {
             const devicesResponse = await fetch(`${API_BASE}/api/houses/${house.id}/devices`, { headers });
             const devicesData = await devicesResponse.json();
+            if (!devicesResponse.ok) {
+              throw new Error(devicesData.error || `Unable to load devices for house ${house.id}`);
+            }
             const devices = Array.isArray(devicesData.devices) ? devicesData.devices : [];
             state.devices = [...state.devices, ...devices];
           }
@@ -791,7 +1021,7 @@
         renderMainPanel();
       } catch (error) {
         console.error('Dashboard load error:', error);
-        mainPanelContent.innerHTML = '<div class="empty">Unable to load dashboard data.</div>';
+        mainPanelContent.innerHTML = `<div class="empty">Unable to load dashboard data: ${error.message}</div>`;
       }
     }
 

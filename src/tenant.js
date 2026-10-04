@@ -25,6 +25,41 @@ async function isHouseOwnedByUser(env, userId, houseId) {
   return Boolean(row);
 }
 
+async function canManageHouse(env, authUser, houseId) {
+  return authUser.role === 'admin' || (
+    authUser.role === 'owner' &&
+    await isHouseOwnedByUser(env, authUser.id, houseId)
+  );
+}
+
+async function userHasDeviceAccess(env, userId, deviceId) {
+  const row = await env.DB
+    .prepare('SELECT 1 FROM user_device_access WHERE user_id = ? AND device_id = ?')
+    .bind(userId, deviceId)
+    .first();
+
+  return Boolean(row);
+}
+
+async function getDeviceColumns(env) {
+  const result = await env.DB.prepare('PRAGMA table_info(devices)').all();
+  return new Set((result.results || []).map(column => column.name));
+}
+
+function getDeviceColumn(columns, currentName, legacyName) {
+  if (columns.has(currentName)) return currentName;
+  if (legacyName && columns.has(legacyName)) return legacyName;
+  return null;
+}
+
+function normalizeDevice(device) {
+  return {
+    ...device,
+    device_name: device.device_name ?? device.name ?? `Device ${device.id}`,
+    device_type: device.device_type ?? device.type ?? null
+  };
+}
+
 export async function createTenant(request, env, authUser) {
   if (authUser.role !== 'admin' && authUser.role !== 'owner') {
     return json({ error: 'Forbidden' }, 403);
@@ -383,10 +418,17 @@ export async function listHouses(request, env, authUser) {
         SELECT DISTINCT h.*
         FROM houses h
         LEFT JOIN user_house_access uha ON uha.house_id = h.id
-        WHERE h.owner_id = ? OR uha.user_id = ?
+        WHERE h.owner_id = ?
+           OR uha.user_id = ?
+           OR EXISTS (
+             SELECT 1
+             FROM devices d
+             JOIN user_device_access uda ON uda.device_id = d.id
+             WHERE d.house_id = h.id AND uda.user_id = ?
+           )
         ORDER BY h.created_at DESC
       `)
-      .bind(authUser.id, authUser.id)
+      .bind(authUser.id, authUser.id, authUser.id)
       .all();
 
     return json({ houses: (rows.results || []).map(normalizeHouse) });
@@ -514,16 +556,44 @@ export async function listHouseDevices(request, env, authUser, houseId) {
   const idValidation = validateId(houseId);
   if (!idValidation.ok) return json({ error: 'Invalid house ID' }, 400);
 
-  const canAccess = authUser.role === 'admin' || await userHasHouseAccess(env, authUser.id, idValidation.value);
-  if (!canAccess) return json({ error: 'Forbidden' }, 403);
-
   try {
+    let deviceAccessOnly = false;
+    if (authUser.role !== 'admin') {
+      if (authUser.role === 'owner') {
+        if (!(await isHouseOwnedByUser(env, authUser.id, idValidation.value))) {
+          return json({ error: 'Forbidden' }, 403);
+        }
+      } else {
+        const houseAccess = await env.DB
+          .prepare(`
+            SELECT 1
+            FROM houses h
+            LEFT JOIN user_house_access uha ON uha.house_id = h.id AND uha.user_id = ?
+            LEFT JOIN devices d ON d.house_id = h.id
+            LEFT JOIN user_device_access uda ON uda.device_id = d.id AND uda.user_id = ?
+            WHERE h.id = ? AND (uha.user_id IS NOT NULL OR uda.user_id IS NOT NULL)
+            LIMIT 1
+          `)
+          .bind(authUser.id, authUser.id, idValidation.value)
+          .first();
+
+        if (!houseAccess) return json({ error: 'Forbidden' }, 403);
+        deviceAccessOnly = true;
+      }
+    }
+
     const rows = await env.DB
-      .prepare('SELECT * FROM devices WHERE house_id = ? ORDER BY created_at DESC')
-      .bind(idValidation.value)
+      .prepare(deviceAccessOnly
+        ? `SELECT d.*
+           FROM devices d
+           JOIN user_device_access uda ON uda.device_id = d.id
+           WHERE d.house_id = ? AND uda.user_id = ?
+           ORDER BY d.created_at DESC`
+        : 'SELECT * FROM devices WHERE house_id = ? ORDER BY created_at DESC')
+      .bind(...(deviceAccessOnly ? [idValidation.value, authUser.id] : [idValidation.value]))
       .all();
 
-    return json({ devices: rows.results || [] });
+    return json({ devices: (rows.results || []).map(normalizeDevice) });
   } catch (error) {
     console.error('List devices error:', error);
     return json({ error: 'Failed to fetch devices' }, 500);
@@ -544,21 +614,40 @@ export async function createDevice(request, env, authUser) {
   const idValidation = validateId(houseId);
   if (!idValidation.ok) return json({ error: 'Invalid house ID' }, 400);
 
-  const canManage = authUser.role === 'admin' || await userHasHouseAccess(env, authUser.id, idValidation.value);
+  const canManage = await canManageHouse(env, authUser, idValidation.value);
   if (!canManage) return json({ error: 'Forbidden' }, 403);
 
-  const deviceName = typeof parsed.data?.device_name === 'string' ? parsed.data.device_name.trim() : '';
-  const deviceType = typeof parsed.data?.device_type === 'string' ? parsed.data.device_type.trim() : 'sensor';
+  const deviceName = typeof (parsed.data?.name ?? parsed.data?.device_name) === 'string'
+    ? (parsed.data.name ?? parsed.data.device_name).trim()
+    : '';
+  const deviceType = typeof (parsed.data?.type ?? parsed.data?.device_type) === 'string'
+    ? (parsed.data.type ?? parsed.data.device_type).trim()
+    : 'sensor';
 
   if (!deviceName) return json({ error: 'device_name is required' }, 400);
 
   try {
+    const columns = await getDeviceColumns(env);
+    const nameColumn = getDeviceColumn(columns, 'name', 'device_name');
+    const typeColumn = getDeviceColumn(columns, 'type', 'device_type');
+    if (!nameColumn || !typeColumn || !columns.has('house_id')) {
+      throw new Error('The device table is missing required house, name, or type columns');
+    }
+
+    const insertColumns = ['house_id', nameColumn, typeColumn];
+    const values = [idValidation.value, deviceName, deviceType];
+    if (columns.has('status')) {
+      insertColumns.push('status');
+      values.push(typeof parsed.data?.status === 'string' ? parsed.data.status : 'offline');
+    }
+    if (columns.has('created_at')) {
+      insertColumns.push('created_at');
+      values.push(new Date().toISOString());
+    }
+
     const result = await env.DB
-      .prepare(`
-        INSERT INTO devices (house_id, device_name, device_type, device_id_external, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `)
-      .bind(idValidation.value, deviceName, deviceType, parsed.data?.device_id_external || null, parsed.data?.status || 'offline', new Date().toISOString())
+      .prepare(`INSERT INTO devices (${insertColumns.join(', ')}) VALUES (${insertColumns.map(() => '?').join(', ')})`)
+      .bind(...values)
       .run();
 
     const device = await env.DB
@@ -566,7 +655,7 @@ export async function createDevice(request, env, authUser) {
       .bind(result.meta?.last_row_id)
       .first();
 
-    return json({ success: true, device }, 201);
+    return json({ success: true, device: device ? normalizeDevice(device) : null }, 201);
   } catch (error) {
     console.error('Create device error:', error);
     return json({ error: 'Failed to create device' }, 500);
@@ -585,10 +674,12 @@ export async function getDevice(request, env, authUser, deviceId) {
 
     if (!row) return json({ error: 'Device not found' }, 404);
 
-    const canAccess = authUser.role === 'admin' || await userHasHouseAccess(env, authUser.id, row.house_id);
+    const canAccess = authUser.role === 'admin'
+      || (authUser.role === 'owner' && await isHouseOwnedByUser(env, authUser.id, row.house_id))
+      || await userHasDeviceAccess(env, authUser.id, row.id);
     if (!canAccess) return json({ error: 'Forbidden' }, 403);
 
-    return json({ device: row });
+    return json({ device: normalizeDevice(row) });
   } catch (error) {
     console.error('Get device error:', error);
     return json({ error: 'Failed to fetch device' }, 500);
@@ -606,20 +697,47 @@ export async function updateDevice(request, env, authUser, deviceId) {
       .first();
 
     if (!device) return json({ error: 'Device not found' }, 404);
-    const canManage = authUser.role === 'admin' || await userHasHouseAccess(env, authUser.id, device.house_id);
+    const canManage = await canManageHouse(env, authUser, device.house_id);
     if (!canManage) return json({ error: 'Forbidden' }, 403);
 
     const parsed = await parseJsonBody(request);
     if (!parsed.ok) return json({ error: parsed.error }, 400);
 
-    const deviceName = typeof parsed.data?.device_name === 'string' ? parsed.data.device_name.trim() : device.device_name;
-    const deviceType = typeof parsed.data?.device_type === 'string' ? parsed.data.device_type.trim() : device.device_type;
-    const status = typeof parsed.data?.status === 'string' ? parsed.data.status : device.status;
+    const columns = await getDeviceColumns(env);
+    const nameColumn = getDeviceColumn(columns, 'name', 'device_name');
+    const typeColumn = getDeviceColumn(columns, 'type', 'device_type');
+    if (!nameColumn || !typeColumn) {
+      throw new Error('The device table is missing required name or type columns');
+    }
 
-    await env.DB
-      .prepare('UPDATE devices SET device_name = ?, device_type = ?, status = ? WHERE id = ?')
-      .bind(deviceName, deviceType, status, idValidation.value)
-      .run();
+    const updates = [];
+    const values = [];
+    const requestedName = parsed.data?.name ?? parsed.data?.device_name;
+    const requestedType = parsed.data?.type ?? parsed.data?.device_type;
+    if (requestedName !== undefined) {
+      if (typeof requestedName !== 'string' || !requestedName.trim()) {
+        return json({ error: 'Device name cannot be empty' }, 400);
+      }
+      updates.push(`${nameColumn} = ?`);
+      values.push(requestedName.trim());
+    }
+    if (requestedType !== undefined) {
+      if (typeof requestedType !== 'string' || !requestedType.trim()) {
+        return json({ error: 'Device type cannot be empty' }, 400);
+      }
+      updates.push(`${typeColumn} = ?`);
+      values.push(requestedType.trim());
+    }
+    if (typeof parsed.data?.status === 'string' && columns.has('status')) {
+      updates.push('status = ?');
+      values.push(parsed.data.status);
+    }
+    if (updates.length) {
+      await env.DB
+        .prepare(`UPDATE devices SET ${updates.join(', ')} WHERE id = ?`)
+        .bind(...values, idValidation.value)
+        .run();
+    }
 
     return json({ success: true });
   } catch (error) {
@@ -639,7 +757,7 @@ export async function deleteDevice(request, env, authUser, deviceId) {
       .first();
 
     if (!device) return json({ error: 'Device not found' }, 404);
-    const canManage = authUser.role === 'admin' || await userHasHouseAccess(env, authUser.id, device.house_id);
+    const canManage = await canManageHouse(env, authUser, device.house_id);
     if (!canManage) return json({ error: 'Forbidden' }, 403);
 
     await env.DB.prepare('DELETE FROM devices WHERE id = ?').bind(idValidation.value).run();

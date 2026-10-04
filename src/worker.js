@@ -278,6 +278,10 @@ export default {
     .profile-line { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(148,163,184,0.25); }
     .label { color: var(--muted); }
     .empty { border: 1px dashed var(--border); border-radius: 16px; padding: 22px; color: var(--muted); text-align: center; background: rgba(255,255,255,0.4); }
+    .house-selector { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; color: var(--muted); font-weight: 700; }
+    .house-selector select { min-width: min(100%, 260px); padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: white; color: var(--text); font: inherit; }
+    .device-edit-form { display: grid; gap: 10px; margin: 14px 0; }
+    .device-edit-form input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--text); }
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } }
   </style>
 </head>
@@ -363,6 +367,7 @@ export default {
 
     function showAlert(element, message, type) { element.textContent = message; element.className = 'alert ' + type + ' show'; }
     function clearAlert(element) { element.textContent = ''; element.className = 'alert'; }
+    function escapeHtml(value) { return String(value).replace(/[&<>"']/g, function(character) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]; }); }
     function formatRole(role) { return role ? role.toUpperCase() : 'USER'; }
     function getRoleViews() {
       if (state.role === 'admin' || state.role === 'owner') {
@@ -450,18 +455,123 @@ export default {
       mainPanelContent.innerHTML = '<div class="card-grid">' + html + '</div>';
     }
     function renderDeviceList() {
-      const selectedHouseId = state.selectedHouseId || (state.houses[0] && state.houses[0].id);
-      const visibleDevices = state.devices.filter(function(device) {
-        return !selectedHouseId || Number(device.house_id) === Number(selectedHouseId);
-      });
-      if (!visibleDevices.length) {
-        mainPanelContent.innerHTML = '<div class="empty">No devices available for the selected house.</div>';
+      if (!state.houses.length) {
+        mainPanelContent.innerHTML = '<div class="empty">No house is assigned to this account, so there are no house devices to show.</div>';
         return;
       }
+      const selectedHouse = state.houses.find(function(house) { return Number(house.id) === Number(state.selectedHouseId); }) || state.houses[0];
+      state.selectedHouseId = Number(selectedHouse.id);
+      const selectedHouseId = selectedHouse.id;
+      const visibleDevices = state.devices.filter(function(device) {
+        return Number(device.house_id) === Number(selectedHouseId);
+      });
       const html = visibleDevices.map(function(device) {
-        return '<div class="device-card"><h3>' + (device.device_name || 'Device ' + device.id) + '</h3><div class="meta">Type: ' + (device.device_type || 'Unknown') + '<br />House ID: ' + (device.house_id || 'N/A') + '</div><span class="device-status ' + ((device.status === 'online' || device.status === 'active') ? 'online' : 'offline') + '">' + (device.status || 'offline') + '</span></div>';
+        const online = ['online', 'active', 'on'].includes(String(device.status || '').toLowerCase());
+        const management = state.role === 'admin' || state.role === 'owner';
+        const controls = management
+          ? '<div class="inline-actions"><button class="mini-btn" type="button" data-device-command="on" data-device-id="' + device.id + '">Turn on</button><button class="mini-btn" type="button" data-device-command="off" data-device-id="' + device.id + '">Turn off</button></div><form class="device-edit-form" data-device-id="' + device.id + '"><input name="name" aria-label="Device name" value="' + escapeHtml(device.device_name || '') + '" required /><input name="type" aria-label="Device type" value="' + escapeHtml(device.device_type || '') + '" required /><div class="inline-actions"><button class="mini-btn" type="submit">Save</button><button class="mini-btn" type="button" data-delete-device="' + device.id + '">Delete</button></div></form>'
+          : '<div class="inline-actions"><button class="mini-btn" type="button" data-device-command="on" data-device-id="' + device.id + '">Turn on</button><button class="mini-btn" type="button" data-device-command="off" data-device-id="' + device.id + '">Turn off</button></div>';
+        return '<div class="device-card"><h3>' + escapeHtml(device.device_name || 'Device ' + device.id) + '</h3><div class="meta">Type: ' + escapeHtml(device.device_type || 'Unknown') + '<br />House: ' + escapeHtml(selectedHouse.name || 'House ' + selectedHouse.id) + '</div><span class="device-status ' + (online ? 'online' : 'offline') + '">' + escapeHtml(device.status || 'offline') + '</span>' + controls + '</div>';
       }).join('');
-      mainPanelContent.innerHTML = '<div class="card-grid">' + html + '</div>';
+      const options = state.houses.map(function(house) {
+        return '<option value="' + house.id + '"' + (Number(house.id) === Number(selectedHouseId) ? ' selected' : '') + '>' + escapeHtml(house.name || 'House ' + house.id) + '</option>';
+      }).join('');
+      const content = visibleDevices.length ? '<div class="card-grid">' + html + '</div>' : '<div class="empty">No devices are associated with this house yet.</div>';
+      const addForm = state.role === 'admin' || state.role === 'owner'
+        ? '<form id="addDeviceForm" class="device-edit-form"><strong>Add a device to ' + escapeHtml(selectedHouse.name || 'House ' + selectedHouse.id) + '</strong><input name="name" aria-label="New device name" placeholder="Device name" required /><input name="type" aria-label="New device type" placeholder="Device type (e.g. Switch)" required /><button class="primary-btn" type="submit">Add device</button></form>'
+        : '';
+      mainPanelContent.innerHTML = '<label class="house-selector" for="deviceHouseSelect">Devices for house <select id="deviceHouseSelect">' + options + '</select></label><div id="deviceNotice" class="alert"></div>' + addForm + content;
+      document.getElementById('deviceHouseSelect').addEventListener('change', function(event) {
+        state.selectedHouseId = Number(event.target.value);
+        renderMainPanel();
+      });
+      const deviceNotice = document.getElementById('deviceNotice');
+      async function refreshDevices() {
+        state.devices = [];
+        await loadDashboardData();
+        state.activeView = 'devices';
+        renderMainPanel();
+      }
+      const addDeviceForm = document.getElementById('addDeviceForm');
+      if (addDeviceForm) addDeviceForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        try {
+          await requestJson(API_BASE + '/api/houses/' + selectedHouseId + '/devices', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ name: formData.get('name'), type: formData.get('type') }) });
+          await refreshDevices();
+        } catch (error) {
+          showAlert(deviceNotice, error.message || 'Unable to add device.', 'error');
+        }
+      });
+      document.querySelectorAll('.device-edit-form[data-device-id]').forEach(function(form) {
+        form.addEventListener('submit', async function(event) {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
+          try {
+            await requestJson(API_BASE + '/api/devices/' + form.dataset.deviceId, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ name: formData.get('name'), type: formData.get('type') }) });
+            await refreshDevices();
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to update device.', 'error');
+          }
+        });
+      });
+      document.querySelectorAll('[data-delete-device]').forEach(function(button) {
+        button.addEventListener('click', async function() {
+          if (!window.confirm('Delete this device?')) return;
+          try {
+            await requestJson(API_BASE + '/api/devices/' + button.dataset.deleteDevice, { method: 'DELETE', headers: getAuthHeaders() });
+            await refreshDevices();
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to delete device.', 'error');
+          }
+        });
+      });
+      document.querySelectorAll('[data-device-command]').forEach(function(button) {
+        button.addEventListener('click', async function() {
+          button.disabled = true;
+          let socket;
+          try {
+            const ticketData = await requestJson(API_BASE + '/ws/ticket', {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ houseId: Number(selectedHouseId), deviceId: Number(button.dataset.deviceId), clientType: 'web' })
+            });
+            socket = new WebSocket(API_BASE.replace(/^http/, 'ws') + '/ws/house/' + selectedHouseId + '?ticket=' + encodeURIComponent(ticketData.ticket));
+            await new Promise(function(resolve, reject) {
+              const timeout = window.setTimeout(function() {
+                socket.close();
+                reject(new Error('Device did not acknowledge the command in time.'));
+              }, 10000);
+              socket.addEventListener('open', function() {
+                socket.send(JSON.stringify({ type: 'device_command', targetDeviceId: Number(button.dataset.deviceId), command: button.dataset.deviceCommand }));
+              }, { once: true });
+              socket.addEventListener('message', function(event) {
+                let message;
+                try { message = JSON.parse(event.data); } catch { return; }
+                if (message.type === 'command_routed') {
+                  window.clearTimeout(timeout);
+                  socket.close();
+                  resolve();
+                } else if (message.type === 'error') {
+                  window.clearTimeout(timeout);
+                  socket.close();
+                  reject(new Error(message.error || 'Device command failed.'));
+                }
+              });
+              socket.addEventListener('error', function() {
+                window.clearTimeout(timeout);
+                reject(new Error('Could not connect to the device control channel.'));
+              }, { once: true });
+            });
+            showAlert(deviceNotice, 'Command sent to the device.', 'success');
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to control device.', 'error');
+          } finally {
+            if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
+            button.disabled = false;
+          }
+        });
+      });
     }
     function renderOverviewPanel() {
       const role = state.role;
@@ -533,6 +643,7 @@ export default {
         for (const house of state.houses) {
           const devicesResponse = await fetch(API_BASE + '/api/houses/' + house.id + '/devices', { headers: headers });
           const devicesData = await devicesResponse.json();
+          if (!devicesResponse.ok) throw new Error(devicesData.error || 'Unable to load devices for house ' + house.id);
           const devices = Array.isArray(devicesData.devices) ? devicesData.devices : [];
           state.devices = state.devices.concat(devices);
         }
@@ -781,5 +892,3 @@ export default {
     }
   }
 };
-
-

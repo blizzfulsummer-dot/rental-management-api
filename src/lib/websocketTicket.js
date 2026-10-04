@@ -97,10 +97,10 @@ export async function issueWebSocketTicket(request, env) {
       return json({ error: 'clientType must be "web" or "device"' }, 400);
     }
 
-    // For device clients, require deviceId
-    if (clientType === 'device' && !deviceId) {
-      return json({ error: 'deviceId is required for device clients' }, 400);
+    if (!Number.isInteger(Number(deviceId)) || Number(deviceId) <= 0) {
+      return json({ error: 'A valid deviceId is required' }, 400);
     }
+    const targetDeviceId = Number(deviceId);
 
     // Query user and their permissions
     const user = await env.DB
@@ -112,49 +112,36 @@ export async function issueWebSocketTicket(request, env) {
       return json({ error: 'User not found' }, 404);
     }
 
-    // Check if user can access this specific house.
-    let hasAccess = false;
-    let userRole = user.role;
+    const device = await env.DB
+      .prepare('SELECT id, house_id FROM devices WHERE id = ? AND house_id = ?')
+      .bind(targetDeviceId, houseId)
+      .first();
+
+    if (!device) {
+      return json({ error: 'Device not found in this house' }, 404);
+    }
+
+    if (clientType === 'device' && user.role !== 'admin') {
+      return json({ error: 'Only admins may connect devices' }, 403);
+    }
 
     if (user.role === 'admin') {
-      hasAccess = true;
-      userRole = 'admin';
-    } else {
+      // Admins can connect to any device.
+    } else if (user.role === 'owner') {
       const ownedHouse = await env.DB
         .prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?')
         .bind(houseId, userId)
         .first();
-
-      if (ownedHouse) {
-        hasAccess = true;
-        userRole = 'owner';
-      } else {
-        const permission = await env.DB
-          .prepare('SELECT access_level FROM user_house_access WHERE user_id = ? AND house_id = ?')
-          .bind(userId, houseId)
-          .first();
-
-        if (permission) {
-          hasAccess = true;
-          userRole = permission.access_level || user.role;
-        }
+      if (!ownedHouse) return json({ error: 'Access denied to this house' }, 403);
+    } else {
+      if (clientType !== 'web') {
+        return json({ error: 'Only admins may connect devices' }, 403);
       }
-    }
-
-    if (!hasAccess) {
-      return json({ error: 'Access denied to this house' }, 403);
-    }
-
-    // Validate device exists (if deviceId provided)
-    if (deviceId) {
-      const device = await env.DB
-        .prepare('SELECT id FROM devices WHERE id = ? AND house_id = ?')
-        .bind(deviceId, houseId)
+      const deviceAccess = await env.DB
+        .prepare('SELECT 1 FROM user_device_access WHERE user_id = ? AND device_id = ?')
+        .bind(userId, targetDeviceId)
         .first();
-
-      if (!device) {
-        return json({ error: 'Device not found in this house' }, 404);
-      }
+      if (!deviceAccess) return json({ error: 'Access denied to this device' }, 403);
     }
 
     // Generate short-lived, single-use ticket
@@ -171,7 +158,7 @@ export async function issueWebSocketTicket(request, env) {
           (ticket_id, user_id, house_id, client_type, device_id, expires_at, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `)
-        .bind(ticketId, userId, houseId, clientType, deviceId || null, expiresAt, new Date().toISOString())
+        .bind(ticketId, userId, houseId, clientType, targetDeviceId, expiresAt, new Date().toISOString())
         .run();
     } catch (error) {
       console.error('Failed to store ticket:', error);

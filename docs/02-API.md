@@ -236,6 +236,36 @@ Authorization: Bearer <access_token>
 **Error Responses**
 - `401 Unauthorized`: Invalid or expired JWT token
 
+## House Device Endpoints
+
+### GET /api/houses/:houseId/devices
+
+List devices associated with a house. Admins can list all devices; owners can
+list devices for their own houses; tenants and users only receive devices
+explicitly granted through `user_device_access`.
+
+### POST /api/houses/:houseId/devices
+
+Create a device in a house (admin or owner of that house only).
+
+```json
+{
+  "name": "Main Gate",
+  "type": "Switch"
+}
+```
+
+### GET, PUT, DELETE /api/devices/:deviceId
+
+Read or manage an individual device. Admins and the house owner can manage
+inventory. A tenant or user can read/use a device only when the corresponding
+`(user_id, device_id)` row exists in `user_device_access`; they cannot edit or
+delete it.
+
+The browser uses `POST /ws/ticket` with `houseId`, `deviceId`, and
+`clientType: "web"` before sending a command to that device. Tickets are scoped
+to one device, and tenant/user ticket issuance checks `user_device_access`.
+
 ---
 
 ## Tenant Endpoints
